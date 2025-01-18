@@ -30,7 +30,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_open_a_server_connection_on_given_address() {
-        let addr = "127.0.0.1:8080";
+        let addr = "127.0.0.1:2";
         let _server = TokioServer::new(Cow::Borrowed(addr)).await.unwrap();
 
         let mut client = TcpStream::connect(addr).unwrap();
@@ -38,5 +38,14 @@ mod tests {
             client.write_all(b"hello").is_ok(),
             "failed to write to server"
         );
+    }
+
+    #[tokio::test]
+    async fn should_return_error_on_invalid_address() {
+        let addr = "127.0.0.1:1";
+        let _server = TokioServer::new(Cow::Borrowed(addr)).await.unwrap();
+
+        let server = TokioServer::new(Cow::Borrowed(addr)).await;
+        assert!(server.is_err(), "expected an error");
     }
 }
