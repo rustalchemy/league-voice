@@ -1,8 +1,9 @@
-use server::Server;
+use server::{tokio::TokioServer, Server};
 
 mod server;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = server::tokio::TokioServer::new("0.0.0.0:8080".into(), 1);
-    server.run()
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = TokioServer::run("0.0.0.0:8080".into()).await?;
+    Ok(())
 }

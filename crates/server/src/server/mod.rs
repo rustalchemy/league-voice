@@ -1,6 +1,7 @@
+use std::borrow::Cow;
+
 pub mod tokio;
 
-pub trait Server {
-    fn run(&mut self) -> Result<(), Box<dyn std::error::Error>>;
-    fn is_running(&self) -> bool;
+pub trait Server: Sized {
+    async fn run(addr: Cow<'_, str>) -> Result<Self, Box<dyn std::error::Error>>;
 }
