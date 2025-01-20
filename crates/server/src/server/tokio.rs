@@ -47,14 +47,13 @@ impl Server for TokioServer {
         self.runtime.spawn(async move {
             let listener = listener.clone();
             loop {
-                let (socket, _) = match listener.accept().await {
+                let (_, _) = match listener.accept().await {
                     Ok((socket, _)) => (socket, None::<()>),
                     Err(e) => {
                         println!("Failed to accept connection: {}", e);
                         continue;
                     }
                 };
-                println!("Accepted connection from: {}", socket.peer_addr().unwrap());
             }
         });
 
@@ -94,6 +93,18 @@ mod tests {
 
         server.run().unwrap();
         assert!(server.is_running(), "expected server to be running");
+    }
+
+    #[test]
+    fn should_stop_server_if_it_leaves_scope() {
+        let addr = "127.0.0.1:89";
+        {
+            let mut server = TokioServer::new(Cow::Borrowed(addr), 1);
+            server.run().unwrap();
+        }
+
+        let client = TcpStream::connect(addr);
+        assert!(client.is_err(), "expected connection to fail");
     }
 
     #[test]
