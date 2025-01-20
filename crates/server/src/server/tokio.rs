@@ -6,6 +6,7 @@ use super::Server;
 pub(crate) struct TokioServer {
     runtime: tokio::runtime::Runtime,
     listener: Arc<TcpListener>,
+    is_running: Arc<bool>,
 }
 
 impl TokioServer {
@@ -26,13 +27,23 @@ impl TokioServer {
             Err(e) => panic!("Failed to bind address: {}", e),
         };
 
-        TokioServer { runtime, listener }
+        TokioServer {
+            runtime,
+            listener,
+            is_running: Arc::new(false),
+        }
     }
 }
 
 impl Server for TokioServer {
     fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let listener = self.listener.clone();
+
+        let is_running = Arc::clone(&self.is_running);
+        if *is_running {
+            return Err("Server is already running".into());
+        }
+
         self.runtime.spawn(async move {
             let listener = listener.clone();
             loop {
@@ -47,7 +58,13 @@ impl Server for TokioServer {
             }
         });
 
+        *Arc::make_mut(&mut self.is_running) = true;
+
         Ok(())
+    }
+
+    fn is_running(&self) -> bool {
+        *self.is_running
     }
 }
 
@@ -58,7 +75,7 @@ mod tests {
 
     #[test]
     fn should_open_a_server_connection_on_given_address() {
-        let addr = "127.0.0.1:2";
+        let addr = "127.0.0.1:82";
         let mut server = TokioServer::new(Cow::Borrowed(addr), 1);
         server.run().unwrap();
 
@@ -70,16 +87,35 @@ mod tests {
     }
 
     #[test]
+    fn should_return_status_of_server() {
+        let addr = "127.0.0.1:88";
+        let mut server = TokioServer::new(Cow::Borrowed(addr), 1);
+        assert!(!server.is_running(), "expected server to be stopped");
+
+        server.run().unwrap();
+        assert!(server.is_running(), "expected server to be running");
+    }
+
+    #[test]
+    fn should_fail_if_server_is_already_running() {
+        let addr = "127.0.0.1:81";
+        let mut server = TokioServer::new(Cow::Borrowed(addr), 1);
+        server.run().unwrap();
+
+        let server_err = server.run();
+        assert!(server_err.is_err(), "expected an error");
+    }
+
+    #[test]
     fn should_fail_when_creating_tokio_runtime() {
-        assert!(
-            std::panic::catch_unwind(|| TokioServer::new(Cow::Borrowed("127.0.0.1:4"), 0)).is_err(),
-            "expected server to panic"
-        );
+        let server_err =
+            std::panic::catch_unwind(|| TokioServer::new(Cow::Borrowed("127.0.0.1:84"), 0));
+        assert!(server_err.is_err(), "expected server to panic");
     }
 
     #[test]
     fn should_return_error_on_invalid_address() {
-        let addr = "127.0.0.1:1";
+        let addr = "127.0.0.1:83";
         let mut server = TokioServer::new(Cow::Borrowed(addr), 1);
         server.run().unwrap();
 
@@ -90,7 +126,8 @@ mod tests {
     #[tokio::test]
     async fn should_fail_if_server_is_initialized_on_existing_tokio_runtime() {
         assert!(
-            std::panic::catch_unwind(|| TokioServer::new(Cow::Borrowed("127.0.0.1:3"), 1)).is_err(),
+            std::panic::catch_unwind(|| TokioServer::new(Cow::Borrowed("127.0.0.1:86"), 1))
+                .is_err(),
             "expected server to panic"
         );
     }
