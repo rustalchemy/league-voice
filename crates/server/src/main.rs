@@ -1,5 +1,6 @@
 use server::{tokio::TokioServer, Server};
 
+mod error;
 mod server;
 
 #[tokio::main]
