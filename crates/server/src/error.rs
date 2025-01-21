@@ -18,5 +18,8 @@ pub enum ServerError {
     IoError(#[from] std::io::Error),
 
     #[error("failed to decode packet: {0}")]
-    FailedToDecodePacket(#[from] bincode::ErrorKind),
+    FailedToDecodePacket(bincode::ErrorKind),
+
+    #[error("failed to decode packet type: {0}")]
+    FailedToDecodePacketType(bincode::ErrorKind),
 }

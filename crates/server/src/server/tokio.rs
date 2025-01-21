@@ -28,12 +28,11 @@ impl TokioServer {
             }
 
             buffer.extend_from_slice(&temp_buffer[..bytes_read]);
-            while let Some(packet) = Self::extract_packet(&mut buffer) {
-                Self::process_packet(
-                    Packet::decode(&packet)
-                        .map_err(|e| ServerError::FailedToDecodePacket(ErrorKind::Custom(e)))?,
-                )
-                .await?;
+            while let Some(buffer) = Self::extract_packet(&mut buffer) {
+                let packet = Packet::decode(&buffer)
+                    .map_err(|e| ServerError::FailedToDecodePacket(ErrorKind::Custom(e)))?;
+
+                let _ = Self::process_packet(packet).await?;
             }
 
             if buffer.len() > MAX_PACKET_SIZE * 2 {
@@ -91,8 +90,9 @@ impl Server for TokioServer {
     }
 
     async fn process_packet(packet: Packet) -> Result<(), ServerError> {
+        println!("Received packet: {:?}", packet);
         let packet_type = bincode::deserialize(&packet.data)
-            .map_err(|e: Box<bincode::ErrorKind>| ServerError::FailedToDecodePacket(*e))?;
+            .map_err(|e: Box<bincode::ErrorKind>| ServerError::FailedToDecodePacketType(*e))?;
 
         match packet_type {
             common::packet::PacketType::Connect => {
@@ -112,9 +112,13 @@ impl Server for TokioServer {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Error;
+    use std::time::Duration;
+
     use super::*;
     use common::packet::PacketType;
     use tokio::net::TcpStream;
+    use tokio::time::sleep;
     use tokio::{io::AsyncWriteExt, select};
 
     async fn check_for_closed(mut client: TcpStream) -> Result<(), std::io::Error> {
@@ -183,6 +187,7 @@ mod tests {
         let client = tokio::spawn(async move {
             let packet = Packet::new(PacketType::Audio(Vec::new())).encode().unwrap();
             let connect = Packet::new(PacketType::Connect).encode().unwrap();
+            let disconnect = Packet::new(PacketType::Disconnect).encode().unwrap();
 
             let mut client = TcpStream::connect(addr).await?;
             client.write_all(connect.as_slice()).await?;
@@ -190,12 +195,17 @@ mod tests {
 
             client.write_all(packet.as_slice()).await?;
             client.write_all(packet.as_slice()).await?;
-            client.flush().await
+            client.write_all(disconnect.as_slice()).await?;
+            client.flush().await?;
+
+            sleep(Duration::from_secs(1)).await;
+
+            Ok::<(), Error>(())
         });
 
         select! {
             Ok(result) = server => {
-                assert!(result.is_ok(), "expected server to keep running");
+                assert!(result.is_err(), "expected server to keep running");
             },
             Ok(result) = client => {
                 assert!(result.is_ok(), "expected client to connect");
