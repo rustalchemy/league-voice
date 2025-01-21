@@ -6,9 +6,7 @@ use crate::error::ServerError;
 use super::Server;
 
 #[derive(Debug)]
-pub(crate) struct TokioServer {
-    listener: Arc<TcpListener>,
-}
+pub(crate) struct TokioServer {}
 
 impl Server for TokioServer {
     async fn run(addr: Cow<'_, str>) -> Result<Self, ServerError> {
@@ -16,8 +14,8 @@ impl Server for TokioServer {
             Ok(listener) => Arc::new(listener),
             Err(e) => return Err(ServerError::FailedToBind(e)),
         };
-        let cloned_listener = listener.clone();
 
+        let cloned_listener: Arc<TcpListener> = listener.clone();
         tokio::spawn(async move {
             let listener = cloned_listener.clone();
             loop {
@@ -32,7 +30,7 @@ impl Server for TokioServer {
         })
         .await?;
 
-        Ok(Self { listener })
+        Ok(Self {})
     }
 }
 
@@ -47,21 +45,18 @@ mod tests {
     async fn should_open_a_server_connection_on_given_address() {
         let addr = "127.0.0.1:81";
 
-        let server = tokio::spawn(async move {
-            let server = TokioServer::run(Cow::Borrowed(addr)).await;
-            assert!(server.is_ok(), "expected server to be running");
-            let _ = server.unwrap();
-        });
-
+        let server = tokio::spawn(async move { TokioServer::run(Cow::Borrowed(addr)).await });
         let client = tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_micros(50)).await;
+            tokio::time::sleep(tokio::time::Duration::from_micros(10)).await;
             let mut client = TcpStream::connect(addr).unwrap();
             client.write_all(b"hello")
         });
 
         select! {
-            _ = server => (),
-            result = client => {
+            Ok(result) = server => {
+                assert!(result.is_ok(), "expected server to start");
+            },
+            Ok(result) = client => {
                 assert!(result.is_ok(), "expected client to connect");
             }
         }
