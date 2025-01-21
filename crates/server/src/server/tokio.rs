@@ -28,11 +28,16 @@ impl TokioServer {
             }
 
             buffer.extend_from_slice(&temp_buffer[..bytes_read]);
-            while let Some(buffer) = Self::extract_packet(&mut buffer) {
-                let packet = Packet::decode(&buffer)
-                    .map_err(|e| ServerError::FailedToDecodePacket(ErrorKind::Custom(e)))?;
 
-                let _ = Self::process_packet(packet).await?;
+            match Packet::decode(&mut buffer)
+                .map_err(|e| ServerError::FailedToDecodePacket(ErrorKind::Custom(e)))
+            {
+                Ok(packet) => {
+                    let _ = Self::process_packet(packet).await?;
+                }
+                Err(e) => {
+                    return Err(ServerError::FailedToProcessPacket(e.to_string()));
+                }
             }
 
             if buffer.len() > MAX_PACKET_SIZE * 2 {
@@ -41,18 +46,6 @@ impl TokioServer {
                 ));
             }
         }
-    }
-
-    fn extract_packet(buf: &mut Vec<u8>) -> Option<Vec<u8>> {
-        if buf.len() < 4 {
-            return None;
-        }
-
-        let length = u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
-        if buf.len() >= length {
-            return Some(buf.drain(..length + 4).collect::<Vec<u8>>());
-        }
-        None
     }
 
     async fn handle_error(stream: &mut TcpStream, error: ServerError) {

@@ -47,7 +47,7 @@ impl Packet {
         Ok(vec)
     }
 
-    pub fn decode(buffer: &[u8]) -> Result<Self, String> {
+    pub fn decode(buffer: &mut Vec<u8>) -> Result<Self, String> {
         if buffer.len() < 4 {
             return Err("Buffer is too small".to_string());
         }
@@ -57,7 +57,10 @@ impl Packet {
             return Err("Buffer is too small".to_string());
         }
 
-        let data = buffer[4..length + 4].to_vec();
+        println!("Length: {}", length);
+        buffer.drain(0..4);
+        let data = buffer.drain(..length).collect::<Vec<u8>>();
+        // let data = buffer[4..length + 4].to_vec();
         Ok(Self {
             length: length as u32,
             data,
@@ -93,16 +96,19 @@ mod tests {
     #[test]
     fn should_encode_and_encode_packet() {
         let packet = Packet::new(PacketType::Connect);
-        assert_eq!(packet, Packet::decode(&packet.encode().unwrap()).unwrap());
+        assert_eq!(
+            packet,
+            Packet::decode(&mut packet.encode().unwrap()).unwrap()
+        );
     }
 
     #[test]
     fn test_packet_decode_small_buffer() {
-        assert!(Packet::decode(&vec![0, 0, 0]).is_err());
+        assert!(Packet::decode(&mut vec![0, 0, 0]).is_err());
     }
 
     #[test]
     fn test_packet_decode_large_buffer() {
-        assert!(Packet::decode(&vec![0, 0, 0, 4, 0]).is_err());
+        assert!(Packet::decode(&mut vec![0, 0, 0, 4, 0]).is_err());
     }
 }
