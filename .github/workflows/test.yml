@@ -17,14 +17,15 @@ jobs:
               run: cargo install cargo-tarpaulin
             - name: Build
               run: cargo build --verbose
-            - name: Run tests
-              run: RUSTFLAGS="-Cinstrument-coverage" cargo test --verbose
             - name: Generate coverage report
               run: cargo tarpaulin --out Xml
             - name: Code Coverage Summary Report
               uses: irongut/CodeCoverageSummary@v1.3.0
               with:
                   filename: cobertura.xml
+                  badge: true
+                  fail_below_min: 100
+                  thresholds: 100
 
             - name: Add Coverage PR Comment
               uses: marocchino/sticky-pull-request-comment@v2

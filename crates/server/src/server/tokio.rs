@@ -71,7 +71,7 @@ mod tests {
     use tokio::{io::AsyncWriteExt, select};
 
     async fn check_for_closed(mut client: TcpStream) -> Result<(), std::io::Error> {
-        let mut buffer = [1; 1024];
+        let mut buffer = [1; MAX_PACKET_SIZE];
         let n = client.read(&mut buffer[..]).await?;
 
         if n == 0 {
