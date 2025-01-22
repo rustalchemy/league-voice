@@ -86,7 +86,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_open_a_server_connection_on_given_address() {
-        let addr = "127.0.0.1:81";
+        let addr = "127.0.0.1:1025";
 
         let server = tokio::spawn(async move { TokioServer::run(Cow::Borrowed(addr)).await });
         let client = tokio::spawn(async move {
@@ -114,7 +114,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_return_error_on_invalid_address() {
-        let addr = "127.0.0.1:82";
+        let addr = "127.0.0.1:1026";
         let server = tokio::spawn(async move { TokioServer::run(Cow::Borrowed(addr)).await });
         let sec_server = tokio::spawn(async move { TokioServer::run(Cow::Borrowed(addr)).await });
 
@@ -130,7 +130,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_process_multiple_packets() {
-        let addr = "127.0.0.1:83";
+        let addr = "127.0.0.1:1027";
 
         let server = tokio::spawn(async move { TokioServer::run(Cow::Borrowed(addr)).await });
         let client = tokio::spawn(async move {
@@ -164,7 +164,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_close_connection_on_invalid_packet() {
-        let addr = "127.0.0.1:84";
+        let addr = "127.0.0.1:1028";
 
         let server = tokio::spawn(async move { TokioServer::run(Cow::Borrowed(addr)).await });
         let client = tokio::spawn(async move {
@@ -185,7 +185,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_close_connection_on_empty_packet() {
-        let addr = "127.0.0.1:85";
+        let addr = "127.0.0.1:1029";
 
         let server = tokio::spawn(async move { TokioServer::run(Cow::Borrowed(addr)).await });
         let client = tokio::spawn(async move {
@@ -207,7 +207,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_close_connection_on_buffer_overflow() {
-        let addr = "127.0.0.1:86";
+        let addr = "127.0.0.1:1030";
 
         let server = tokio::spawn(async move { TokioServer::run(Cow::Borrowed(addr)).await });
         let client = tokio::spawn(async move {
