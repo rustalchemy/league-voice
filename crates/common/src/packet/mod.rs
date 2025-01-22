@@ -21,10 +21,8 @@ impl Packet {
     }
 
     pub fn encode(&self) -> Vec<u8> {
-        let length = self.length.to_be_bytes();
-
-        let mut vec: Vec<u8> = Vec::new();
-        vec.extend_from_slice(&length);
+        let mut vec = Vec::new();
+        vec.extend_from_slice(&self.length.to_be_bytes());
         vec.extend_from_slice(&self.data);
         vec
     }

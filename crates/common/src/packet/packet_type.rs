@@ -17,3 +17,15 @@ impl PacketType {
         bincode::deserialize(data)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_serialize_and_deserialize_packet_type() {
+        let packet_type = PacketType::Connect;
+        let deserialized = PacketType::deserialize(&packet_type.serialize().unwrap()).unwrap();
+        assert_eq!(packet_type, deserialized);
+    }
+}
