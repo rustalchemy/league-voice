@@ -10,12 +10,9 @@ pub(crate) struct TokioClient {
 
 impl Client for TokioClient {
     async fn connect(addr: Cow<'_, str>) -> Result<Self, Box<dyn std::error::Error>> {
-        let stream = match TcpStream::connect(Cow::into_owned(addr.clone())).await {
-            Ok(stream) => Arc::new(stream),
-            Err(e) => return Err(Box::new(e)),
-        };
-
-        Ok(Self { stream })
+        Ok(Self {
+            stream: Arc::new(TcpStream::connect(Cow::into_owned(addr.clone())).await?),
+        })
     }
 }
 

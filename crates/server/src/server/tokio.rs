@@ -1,14 +1,13 @@
 use super::Server;
 use crate::error::ServerError;
-use bincode::ErrorKind;
-use common::packet::Packet;
+use common::packet::{packet_type::PacketType, Packet};
 use std::borrow::Cow;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
 };
 
-const MAX_PACKET_SIZE: usize = 1024;
+const MAX_PACKET_SIZE: usize = 512;
 
 #[derive(Debug)]
 pub(crate) struct TokioServer {}
@@ -17,87 +16,46 @@ impl TokioServer {
     async fn handle_stream(stream: &mut TcpStream) -> Result<(), ServerError> {
         let mut buffer = Vec::with_capacity(MAX_PACKET_SIZE * 2);
         loop {
-            let mut temp_buffer = [0; 1024];
-            let bytes_read = stream
-                .read(&mut temp_buffer)
-                .await
-                .map_err(|e| ServerError::IoError(e))?;
-
+            let mut temp_buffer = [0; MAX_PACKET_SIZE];
+            let bytes_read = stream.read(&mut temp_buffer).await?;
             if bytes_read == 0 {
                 return Err(ServerError::ConnectionClosedByPeer);
             }
 
             buffer.extend_from_slice(&temp_buffer[..bytes_read]);
 
-            match Packet::decode(&mut buffer)
-                .map_err(|e| ServerError::FailedToDecodePacket(ErrorKind::Custom(e)))
-            {
-                Ok(packet) => {
-                    let _ = Self::process_packet(packet).await?;
-                }
-                Err(e) => {
-                    return Err(ServerError::FailedToProcessPacket(e.to_string()));
-                }
+            while let Ok(packet) = Packet::decode(&mut buffer) {
+                TokioServer::process_packet(packet).await?;
             }
 
             if buffer.len() > MAX_PACKET_SIZE * 2 {
-                return Err(ServerError::FailedToProcessPacket(
-                    "Buffer overflow: possible protocol error".to_string(),
-                ));
+                return Err(ServerError::FailedToProcessPacket);
             }
-        }
-    }
-
-    async fn handle_error(stream: &mut TcpStream, error: ServerError) {
-        println!("Error: {}", error);
-        match stream.shutdown().await {
-            Err(e) => {
-                println!("Failed to shutdown stream: {}", e);
-                return;
-            }
-            Ok(_) => println!("Stream shutdown successfully"),
         }
     }
 }
 
 impl Server for TokioServer {
-    async fn run(addr: Cow<'_, str>) -> Result<Self, ServerError> {
-        let listener = TcpListener::bind(Cow::into_owned(addr.clone()))
-            .await
-            .map_err(|e| ServerError::FailedToBind(e))?;
+    async fn run(addr: Cow<'_, str>) -> Result<(), ServerError> {
+        let listener = TcpListener::bind(Cow::into_owned(addr.clone())).await?;
 
-        tokio::spawn(async move {
-            loop {
-                let (mut stream, _) = listener.accept().await.unwrap();
-                tokio::spawn(async move {
-                    match TokioServer::handle_stream(&mut stream).await {
-                        Err(e) => TokioServer::handle_error(&mut stream, e).await,
-                        Ok(_) => (),
-                    }
-                });
-            }
-        })
-        .await?;
+        loop {
+            let (mut stream, _) = listener.accept().await.unwrap();
 
-        Ok(Self {})
+            tokio::spawn(async move {
+                if let Err(e) = TokioServer::handle_stream(&mut stream).await {
+                    println!("Error: {}", e);
+                }
+                stream.shutdown().await
+            });
+        }
     }
 
     async fn process_packet(packet: Packet) -> Result<(), ServerError> {
-        println!("Received packet: {:?}", packet);
-        let packet_type = bincode::deserialize(&packet.data)
-            .map_err(|e: Box<bincode::ErrorKind>| ServerError::FailedToDecodePacketType(*e))?;
-
-        match packet_type {
-            common::packet::PacketType::Connect => {
-                println!("Received connect packet");
-            }
-            common::packet::PacketType::Disconnect => {
-                println!("Received disconnect packet");
-            }
-            common::packet::PacketType::Audio(data) => {
-                println!("Received audio packet: {:?}", data);
-            }
-        }
+        println!(
+            "Processing packet: {:?}",
+            PacketType::deserialize(packet.data.as_slice())?
+        );
 
         Ok(())
     }
@@ -105,11 +63,9 @@ impl Server for TokioServer {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::io::Error;
     use std::time::Duration;
-
-    use super::*;
-    use common::packet::PacketType;
     use tokio::net::TcpStream;
     use tokio::time::sleep;
     use tokio::{io::AsyncWriteExt, select};
@@ -138,8 +94,8 @@ mod tests {
             client
                 .write_all(
                     Packet::new(PacketType::Connect)
-                        .encode()
                         .unwrap()
+                        .encode()
                         .as_slice(),
                 )
                 .await?;
@@ -178,9 +134,9 @@ mod tests {
 
         let server = tokio::spawn(async move { TokioServer::run(Cow::Borrowed(addr)).await });
         let client = tokio::spawn(async move {
-            let packet = Packet::new(PacketType::Audio(Vec::new())).encode().unwrap();
-            let connect = Packet::new(PacketType::Connect).encode().unwrap();
-            let disconnect = Packet::new(PacketType::Disconnect).encode().unwrap();
+            let packet = Packet::new(PacketType::Audio(Vec::new())).unwrap().encode();
+            let connect = Packet::new(PacketType::Connect).unwrap().encode();
+            let disconnect = Packet::new(PacketType::Disconnect).unwrap().encode();
 
             let mut client = TcpStream::connect(addr).await?;
             client.write_all(connect.as_slice()).await?;
@@ -256,7 +212,7 @@ mod tests {
         let server = tokio::spawn(async move { TokioServer::run(Cow::Borrowed(addr)).await });
         let client = tokio::spawn(async move {
             let mut client = TcpStream::connect(addr).await?;
-            let packet = Packet::new(PacketType::Audio(Vec::new())).encode().unwrap();
+            let packet = Packet::new(PacketType::Audio(Vec::new())).unwrap().encode();
             let mut buffer = vec![1; 1024 * 3];
             buffer.extend_from_slice(&packet);
 

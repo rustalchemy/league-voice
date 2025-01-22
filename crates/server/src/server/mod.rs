@@ -5,6 +5,6 @@ use std::borrow::Cow;
 pub mod tokio;
 
 pub trait Server: Sized {
-    async fn run(addr: Cow<'_, str>) -> Result<Self, ServerError>;
+    async fn run(addr: Cow<'_, str>) -> Result<(), ServerError>;
     async fn process_packet(packet: Packet) -> Result<(), ServerError>;
 }
