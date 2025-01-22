@@ -1,6 +1,7 @@
 use client::{tokio::TokioClient, Client};
 
 mod client;
+mod error;
 
 #[tokio::main]
 #[cfg(not(tarpaulin_include))]
