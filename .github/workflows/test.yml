@@ -27,9 +27,8 @@ jobs:
                   fail_below_min: 100
                   thresholds: 100
 
-            - name: Add Coverage PR Comment
-              uses: marocchino/sticky-pull-request-comment@v2
-              if: github.event_name == 'pull_request'
+            - name: Coveralls
+              uses: coverallsapp/github-action@v2
               with:
-                  recreate: true
-                  path: code-coverage-results.md
+                  path-to-lcov: ./cobertura.xml
+                  format: cobertura
