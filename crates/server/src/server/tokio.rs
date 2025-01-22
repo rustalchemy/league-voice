@@ -154,7 +154,7 @@ mod tests {
 
         select! {
             Ok(result) = server => {
-                assert!(result.is_err(), "expected server to keep running");
+                assert!(result.is_ok(), "expected server to keep running");
             },
             Ok(result) = client => {
                 assert!(result.is_ok(), "expected client to connect");
