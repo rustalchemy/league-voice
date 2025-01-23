@@ -11,6 +11,15 @@ pub enum ServerError {
     #[error("connection closed by peer")]
     ConnectionClosedByPeer,
 
+    #[error("handler not found for packet id")]
+    HandlerNotFound,
+
+    #[error("invalid packet")]
+    InvalidPacket,
+
+    #[error("invalid packet id for handler")]
+    InvalidHandlerPacketId,
+
     #[error("io error: {0}")]
     IoError(#[from] std::io::Error),
 
