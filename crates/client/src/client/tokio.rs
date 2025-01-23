@@ -1,6 +1,10 @@
+use common::packet::{packet_type::PacketType, ConnectPacket, Packet};
 use std::{borrow::Cow, sync::Arc};
 
-use tokio::net::TcpStream;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+};
 
 use crate::{client::Client, error::ClientError};
 
@@ -10,8 +14,12 @@ pub(crate) struct TokioClient {
 
 impl Client for TokioClient {
     async fn connect(addr: Cow<'_, str>) -> Result<Self, ClientError> {
-        let stream = TcpStream::connect(Cow::into_owned(addr.clone())).await?;
+        let mut stream = TcpStream::connect(Cow::into_owned(addr.clone())).await?;
         stream.set_nodelay(true)?;
+
+        let packet: Vec<u8> = Packet::new(ConnectPacket)?.into();
+        stream.write_all(&packet).await?;
+        stream.flush().await?;
 
         Ok(Self {
             stream: Arc::new(stream),

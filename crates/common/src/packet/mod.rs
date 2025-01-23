@@ -56,6 +56,12 @@ impl Packet {
     }
 }
 
+impl From<Packet> for Vec<u8> {
+    fn from(packet: Packet) -> Self {
+        packet.encode()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
