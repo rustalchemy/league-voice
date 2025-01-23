@@ -283,4 +283,32 @@ mod tests {
             }
         }
     }
+
+    #[tokio::test]
+    async fn should_close_connection_on_handler_not_found() {
+        let addr = "127.0.0.1:1031";
+
+        let server = tokio::spawn(async move {
+            let mut server = TokioServer::new();
+            server.run(Cow::Borrowed(addr)).await
+        });
+        let client = tokio::spawn(async move {
+            let connect = Packet::new(ConnectPacket).unwrap().encode();
+
+            let mut client = TcpStream::connect(addr).await?;
+            client.write_all(connect.as_slice()).await?;
+            client.flush().await?;
+
+            check_for_closed(client).await
+        });
+
+        select! {
+            Ok(result) = server => {
+                assert!(result.is_ok(), "expected server to keep running");
+            },
+            Ok(result) = client => {
+                assert!(result.is_err(), "expected client to error with buffer overflow");
+            }
+        }
+    }
 }
