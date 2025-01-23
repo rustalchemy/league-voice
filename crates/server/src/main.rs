@@ -18,7 +18,9 @@ async fn main() -> Result<(), ServerError> {
     let mut server = TokioServer::new();
     server.add_handler(
         PacketId::ConnectPacket,
-        Box::new(handlers::connect::ConnectHandler {}),
+        Box::new(handlers::connect::ConnectHandler {
+            
+        }),
     );
     server.add_handler(
         PacketId::AudioPacket,

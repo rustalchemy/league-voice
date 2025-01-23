@@ -16,3 +16,33 @@ impl PacketHandler for AudioHandler {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::packet::ids::PacketId;
+
+    #[tokio::test]
+    async fn test_audio_handler() {
+        let handler = AudioHandler {};
+        let packet_bytes = AudioPacket::default().encode().unwrap();
+        let packet_id = PacketId::AudioPacket;
+
+        assert!(
+            handler.process(&packet_id, &packet_bytes).await.is_ok(),
+            "Expected handler to process packet"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_audio_handler_invalid_packet_id() {
+        let handler = AudioHandler {};
+        let packet_bytes = AudioPacket::default().encode().unwrap();
+        let packet_id = PacketId::ConnectPacket;
+
+        assert!(
+            handler.process(&packet_id, &packet_bytes).await.is_err(),
+            "Expected handler to return error for invalid packet id"
+        );
+    }
+}

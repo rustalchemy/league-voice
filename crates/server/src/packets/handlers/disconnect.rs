@@ -16,3 +16,33 @@ impl PacketHandler for DisconnectHandler {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::packet::ids::PacketId;
+
+    #[tokio::test]
+    async fn test_disconnect_handler() {
+        let handler = DisconnectHandler {};
+        let packet_bytes = DisconnectPacket::default().encode().unwrap();
+        let packet_id = PacketId::DisconnectPacket;
+
+        assert!(
+            handler.process(&packet_id, &packet_bytes).await.is_ok(),
+            "Expected handler to process packet"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_disconnect_handler_invalid_packet_id() {
+        let handler = DisconnectHandler {};
+        let packet_bytes = DisconnectPacket::default().encode().unwrap();
+        let packet_id = PacketId::AudioPacket;
+
+        assert!(
+            handler.process(&packet_id, &packet_bytes).await.is_err(),
+            "Expected handler to return error for invalid packet id"
+        );
+    }
+}

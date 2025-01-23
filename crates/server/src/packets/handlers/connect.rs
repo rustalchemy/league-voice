@@ -1,7 +1,7 @@
 use crate::{error::ServerError, packets::PacketHandler};
 use common::packet::{ids::PacketId, packet_type::PacketType, ConnectPacket};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ConnectHandler {}
 
 #[async_trait::async_trait]
@@ -14,5 +14,35 @@ impl PacketHandler for ConnectHandler {
         let packet = ConnectPacket::decode(packet).map_err(|_| ServerError::InvalidPacket)?;
         println!("Processing connect packet: {:?}", packet);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::packet::ids::PacketId;
+
+    #[tokio::test]
+    async fn test_connect_handler() {
+        let handler = ConnectHandler {};
+        let packet_bytes = ConnectPacket::default().encode().unwrap();
+        let packet_id = PacketId::ConnectPacket;
+
+        assert!(
+            handler.process(&packet_id, &packet_bytes).await.is_ok(),
+            "Expected handler to process packet"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_connect_handler_invalid_packet_id() {
+        let handler = ConnectHandler {};
+        let packet_bytes = ConnectPacket::default().encode().unwrap();
+        let packet_id = PacketId::AudioPacket;
+
+        assert!(
+            handler.process(&packet_id, &packet_bytes).await.is_err(),
+            "Expected handler to return error for invalid packet id"
+        );
     }
 }
