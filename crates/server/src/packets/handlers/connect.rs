@@ -24,24 +24,28 @@ mod tests {
 
     #[tokio::test]
     async fn test_connect_handler() {
-        let handler = ConnectHandler {};
-        let packet_bytes = ConnectPacket::default().encode().unwrap();
-        let packet_id = PacketId::ConnectPacket;
-
         assert!(
-            handler.process(&packet_id, &packet_bytes).await.is_ok(),
+            ConnectHandler {}
+                .process(
+                    &PacketId::ConnectPacket,
+                    &ConnectPacket::default().encode().unwrap()
+                )
+                .await
+                .is_ok(),
             "Expected handler to process packet"
         );
     }
 
     #[tokio::test]
     async fn test_connect_handler_invalid_packet_id() {
-        let handler = ConnectHandler {};
-        let packet_bytes = ConnectPacket::default().encode().unwrap();
-        let packet_id = PacketId::AudioPacket;
-
         assert!(
-            handler.process(&packet_id, &packet_bytes).await.is_err(),
+            ConnectHandler {}
+                .process(
+                    &PacketId::AudioPacket,
+                    &ConnectPacket::default().encode().unwrap()
+                )
+                .await
+                .is_err(),
             "Expected handler to return error for invalid packet id"
         );
     }

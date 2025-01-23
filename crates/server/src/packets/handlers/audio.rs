@@ -24,24 +24,28 @@ mod tests {
 
     #[tokio::test]
     async fn test_audio_handler() {
-        let handler = AudioHandler {};
-        let packet_bytes = AudioPacket::default().encode().unwrap();
-        let packet_id = PacketId::AudioPacket;
-
         assert!(
-            handler.process(&packet_id, &packet_bytes).await.is_ok(),
+            AudioHandler {}
+                .process(
+                    &PacketId::AudioPacket,
+                    &AudioPacket::default().encode().unwrap()
+                )
+                .await
+                .is_ok(),
             "Expected handler to process packet"
         );
     }
 
     #[tokio::test]
     async fn test_audio_handler_invalid_packet_id() {
-        let handler = AudioHandler {};
-        let packet_bytes = AudioPacket::default().encode().unwrap();
-        let packet_id = PacketId::ConnectPacket;
-
         assert!(
-            handler.process(&packet_id, &packet_bytes).await.is_err(),
+            AudioHandler {}
+                .process(
+                    &PacketId::ConnectPacket,
+                    &AudioPacket::default().encode().unwrap()
+                )
+                .await
+                .is_err(),
             "Expected handler to return error for invalid packet id"
         );
     }
