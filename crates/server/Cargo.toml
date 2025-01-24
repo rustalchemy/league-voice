@@ -12,3 +12,4 @@ common = { path = "../common" }
 bincode = "1.3"
 
 async-trait = "0.1"
+uuid = { version = "1.12.1", features = ["v4", "fast-rng"] }

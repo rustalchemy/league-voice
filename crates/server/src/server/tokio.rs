@@ -4,46 +4,89 @@ use common::packet::{ids::PacketId, Packet};
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
+    net::{tcp::OwnedReadHalf, TcpListener, TcpStream},
+    select,
+    sync::Mutex,
 };
+use uuid::Uuid;
 
 const MAX_PACKET_SIZE: usize = 512;
 
+struct Client {
+    read_rx: tokio::sync::mpsc::Receiver<Vec<u8>>,
+    write_tx: tokio::sync::mpsc::Sender<Vec<u8>>,
+}
+
 type PacketHandlerMap = HashMap<u8, Box<dyn PacketHandler>>;
+type Clients = Mutex<HashMap<Uuid, Client>>;
 
 pub(crate) struct TokioServer {
     handlers: Arc<PacketHandlerMap>,
+    clients: Arc<Clients>,
 }
 
 impl TokioServer {
     pub fn new() -> Self {
         Self {
             handlers: Arc::new(PacketHandlerMap::new()),
+            clients: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     async fn handle_stream(
+        id: Uuid,
         handlers: Arc<PacketHandlerMap>,
-        stream: &mut TcpStream,
+        clients: Arc<Clients>,
+        stream: TcpStream,
     ) -> Result<(), ServerError> {
-        let mut buffer = Vec::with_capacity(MAX_PACKET_SIZE * 2);
-        loop {
-            let handlers = handlers.clone();
-            let mut temp_buffer = [0; MAX_PACKET_SIZE];
-            let bytes_read = stream.read(&mut temp_buffer).await?;
-            if bytes_read == 0 {
-                return Err(ServerError::ConnectionClosedByPeer);
+        let (write_tx, mut write_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(32);
+        let (_read_tx, read_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(32);
+
+        let (mut read, mut write) = stream.into_split();
+
+        let read_handle = tokio::spawn(async move {
+            let mut buffer = Vec::with_capacity(MAX_PACKET_SIZE * 2);
+            loop {
+                let handlers = handlers.clone();
+                let mut temp_buffer = [0; MAX_PACKET_SIZE];
+                let bytes_read = read.read(&mut temp_buffer).await?;
+                if bytes_read == 0 {
+                    return Err(ServerError::ConnectionClosedByPeer);
+                }
+
+                buffer.extend_from_slice(&temp_buffer[..bytes_read]);
+
+                while let Ok(packet) = Packet::decode(&mut buffer) {
+                    TokioServer::process_packet(handlers.clone(), packet).await?;
+                }
+
+                if buffer.len() > MAX_PACKET_SIZE * 2 {
+                    println!("Buffer length: {}", buffer.len());
+                    return Err(ServerError::FailedToProcessPacket);
+                }
+            }
+        });
+
+        let write_handle = tokio::spawn(async move {
+            while let Some(packet) = write_rx.recv().await {
+                write.write_all(&packet).await?;
+                write.flush().await?;
             }
 
-            buffer.extend_from_slice(&temp_buffer[..bytes_read]);
+            Ok(())
+        });
 
-            while let Ok(packet) = Packet::decode(&mut buffer) {
-                TokioServer::process_packet(handlers.clone(), packet).await?;
-            }
+        {
+            let mut clients = clients.lock().await;
+            clients.insert(id, Client { read_rx, write_tx });
+        }
 
-            if buffer.len() > MAX_PACKET_SIZE * 2 {
-                println!("Buffer length: {}", buffer.len());
-                return Err(ServerError::FailedToProcessPacket);
+        select! {
+            Ok(read_result) = read_handle => {
+                read_result
+            },
+            Ok(write_result) = write_handle => {
+                write_result
             }
         }
     }
@@ -62,15 +105,29 @@ impl Server for TokioServer {
         let listener = TcpListener::bind(Cow::into_owned(addr.clone())).await?;
 
         let handlers = self.handlers.clone();
+        let clients = self.clients.clone();
         loop {
             let handlers = handlers.clone();
-            let (mut stream, _) = listener.accept().await.unwrap();
+            let clients = clients.clone();
+
+            let (stream, _) = listener.accept().await.unwrap();
 
             tokio::spawn(async move {
-                if let Err(e) = TokioServer::handle_stream(handlers.clone(), &mut stream).await {
+                let client_id = Uuid::new_v4();
+                println!("Client connected: {}", client_id);
+
+                if let Err(e) =
+                    TokioServer::handle_stream(client_id, handlers.clone(), clients.clone(), stream)
+                        .await
+                {
                     println!("Error: {}", e);
                 }
-                stream.shutdown().await
+
+                {
+                    let mut clients = clients.lock().await;
+                    clients.remove(&client_id);
+                    println!("Client disconnected: {}", client_id);
+                }
             });
         }
     }
