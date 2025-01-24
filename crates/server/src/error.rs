@@ -1,3 +1,6 @@
+use std::sync::mpsc::SendError;
+
+use common::packet::error;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -25,4 +28,7 @@ pub enum ServerError {
 
     #[error("failed to decode packet type: {0}")]
     FailedToDecodePacketType(#[from] Box<bincode::ErrorKind>),
+
+    #[error("failed to send to client")]
+    ClientSendError,
 }

@@ -1,10 +1,13 @@
-use super::Server;
-use crate::{error::ServerError, packets::PacketHandler};
+use super::{Client, Clients, Server};
+use crate::{
+    error::ServerError,
+    packets::{PacketData, PacketHandler},
+};
 use common::packet::{ids::PacketId, Packet};
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::{tcp::OwnedReadHalf, TcpListener, TcpStream},
+    net::{TcpListener, TcpStream},
     select,
     sync::Mutex,
 };
@@ -12,13 +15,7 @@ use uuid::Uuid;
 
 const MAX_PACKET_SIZE: usize = 512;
 
-struct Client {
-    read_rx: tokio::sync::mpsc::Receiver<Vec<u8>>,
-    write_tx: tokio::sync::mpsc::Sender<Vec<u8>>,
-}
-
 type PacketHandlerMap = HashMap<u8, Box<dyn PacketHandler>>;
-type Clients = Mutex<HashMap<Uuid, Client>>;
 
 pub(crate) struct TokioServer {
     handlers: Arc<PacketHandlerMap>,
@@ -34,13 +31,12 @@ impl TokioServer {
     }
 
     async fn handle_stream(
-        id: Uuid,
+        client_id: Uuid,
         handlers: Arc<PacketHandlerMap>,
         clients: Arc<Clients>,
         stream: TcpStream,
     ) -> Result<(), ServerError> {
         let (write_tx, mut write_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(32);
-        let (_read_tx, read_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(32);
 
         let (mut read, mut write) = stream.into_split();
 
@@ -57,7 +53,7 @@ impl TokioServer {
                 buffer.extend_from_slice(&temp_buffer[..bytes_read]);
 
                 while let Ok(packet) = Packet::decode(&mut buffer) {
-                    TokioServer::process_packet(handlers.clone(), packet).await?;
+                    TokioServer::process_packet(client_id, handlers.clone(), packet).await?;
                 }
 
                 if buffer.len() > MAX_PACKET_SIZE * 2 {
@@ -78,7 +74,7 @@ impl TokioServer {
 
         {
             let mut clients = clients.lock().await;
-            clients.insert(id, Client { read_rx, write_tx });
+            clients.insert(client_id, Client::new(client_id, write_tx));
         }
 
         select! {
@@ -133,6 +129,7 @@ impl Server for TokioServer {
     }
 
     async fn process_packet(
+        client_id: Uuid,
         handlers: Arc<Self::Handlers>,
         packet: Packet,
     ) -> Result<(), ServerError> {
@@ -148,7 +145,11 @@ impl Server for TokioServer {
             }
         };
 
-        PacketHandler::process(handler, &packet_id.clone(), packet.data.as_slice()).await
+        PacketHandler::process(handler, PacketData::new(client_id, packet_id, packet.data)).await
+    }
+
+    fn clients(&self) -> Arc<Clients> {
+        self.clients.clone()
     }
 }
 
@@ -165,13 +166,14 @@ mod tests {
 
     async fn start_server(addr: &str) -> Result<(), ServerError> {
         let mut server = TokioServer::new();
+
         server.add_handler(
             PacketId::ConnectPacket,
             Box::new(handlers::connect::ConnectHandler {}),
         );
         server.add_handler(
             PacketId::AudioPacket,
-            Box::new(handlers::audio::AudioHandler {}),
+            Box::new(handlers::audio::AudioHandler(server.clients().clone())),
         );
         server.add_handler(
             PacketId::DisconnectPacket,
