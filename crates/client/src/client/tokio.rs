@@ -17,9 +17,9 @@ impl Client for TokioClient {
         let mut stream = TcpStream::connect(Cow::into_owned(addr.clone())).await?;
         stream.set_nodelay(true)?;
 
-        let packet: Vec<u8> = Packet::new(ConnectPacket)?.into();
-        stream.write_all(&packet).await?;
-        stream.flush().await?;
+        // let packet: Vec<u8> = Packet::new(ConnectPacket)?.into();
+        // stream.write_all(&packet).await?;
+        // stream.flush().await?;
 
         Ok(Self {
             stream: Arc::new(stream),

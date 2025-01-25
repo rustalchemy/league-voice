@@ -1,6 +1,3 @@
-use std::sync::mpsc::SendError;
-
-use common::packet::error;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

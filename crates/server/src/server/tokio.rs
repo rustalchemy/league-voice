@@ -1,7 +1,8 @@
-use super::{Client, Clients, Server};
+use super::{Clients, Server};
 use crate::{
     error::ServerError,
     packets::{PacketData, PacketHandler},
+    server::client::Client,
 };
 use common::packet::{ids::PacketId, Packet};
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
@@ -37,7 +38,6 @@ impl TokioServer {
         stream: TcpStream,
     ) -> Result<(), ServerError> {
         let (write_tx, mut write_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(32);
-
         let (mut read, mut write) = stream.into_split();
 
         let read_handle = tokio::spawn(async move {
@@ -235,31 +235,35 @@ mod tests {
         }
     }
 
+    async fn connect_and_send_packets(addr: &str) -> Result<(), Error> {
+        let packet = Packet::new(AudioPacket { track: vec![1] })
+            .unwrap()
+            .encode();
+        let connect = Packet::new(ConnectPacket).unwrap().encode();
+        let disconnect = Packet::new(DisconnectPacket).unwrap().encode();
+
+        let mut client = TcpStream::connect(addr).await?;
+        client.write_all(connect.as_slice()).await?;
+        client.flush().await?;
+
+        sleep(Duration::from_millis(2)).await;
+
+        client.write_all(packet.as_slice()).await?;
+        client.write_all(packet.as_slice()).await?;
+        client.write_all(disconnect.as_slice()).await?;
+        client.flush().await?;
+
+        sleep(Duration::from_millis(2)).await;
+
+        Ok::<(), Error>(())
+    }
+
     #[tokio::test]
     async fn should_process_multiple_packets() {
         let addr = "127.0.0.1:1027";
 
         let server = tokio::spawn(async move { start_server(addr).await });
-        let client = tokio::spawn(async move {
-            let packet = Packet::new(AudioPacket { track: vec![1] })
-                .unwrap()
-                .encode();
-            let connect = Packet::new(ConnectPacket).unwrap().encode();
-            let disconnect = Packet::new(DisconnectPacket).unwrap().encode();
-
-            let mut client = TcpStream::connect(addr).await?;
-            client.write_all(connect.as_slice()).await?;
-            client.flush().await?;
-
-            client.write_all(packet.as_slice()).await?;
-            client.write_all(packet.as_slice()).await?;
-            client.write_all(disconnect.as_slice()).await?;
-            client.flush().await?;
-
-            sleep(Duration::from_secs(1)).await;
-
-            Ok::<(), Error>(())
-        });
+        let client = tokio::spawn(async move { connect_and_send_packets(addr).await });
 
         select! {
             Ok(result) = server => {
@@ -267,6 +271,26 @@ mod tests {
             },
             Ok(result) = client => {
                 assert!(result.is_ok(), "expected client to connect");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn should_process_multiple_clients() {
+        let addr = "127.0.0.1:1032";
+        let server = tokio::spawn(async move { start_server(addr).await });
+        let client = tokio::spawn(async move { connect_and_send_packets(addr).await });
+        let second_client = tokio::spawn(async move { connect_and_send_packets(addr).await });
+
+        select! {
+            Ok(result) = server => {
+                assert!(result.is_ok(), "expected server to keep running");
+            },
+            Ok(result) = client => {
+                assert!(result.is_ok(), "expected client to connect");
+            }
+            Ok(result) = second_client => {
+                assert!(result.is_ok(), "expected second_client to connect");
             }
         }
     }

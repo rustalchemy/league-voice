@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     error::ServerError,
     packets::{PacketData, PacketHandler},
-    server::Clients,
+    server::client::Clients,
 };
 use common::packet::{ids::PacketId, packet_type::PacketType, AudioPacket};
 
@@ -20,13 +20,22 @@ impl PacketHandler for AudioHandler {
             AudioPacket::decode(&data.packet).map_err(|_| ServerError::InvalidPacket)?;
         println!("Processing audio packet: {:?}", packet);
 
-        let clients = self.0.lock().await;
-        for client in clients.values() {
-            if client.id() != data.client_id {
-                client.send(&packet.encode().unwrap()).await?;
-                println!("Sent audio packet to client: {:?}", client.id());
+        {
+            for client in self.0.lock().await.values() {
+                if client.id() != data.client_id {
+                    match client.send(&data.packet).await {
+                        Ok(_) => {
+                            println!("{:?} -> {:?}", data.client_id, client.id());
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    };
+                }
             }
         }
+
+        println!("Processed audio packet: {:?}", packet);
 
         Ok(())
     }
@@ -34,22 +43,40 @@ impl PacketHandler for AudioHandler {
 
 #[cfg(test)]
 mod tests {
+    use crate::server::client::Client;
+
     use super::*;
+    use ::tokio::sync::{mpsc, Mutex};
     use common::packet::ids::PacketId;
+    use std::collections::HashMap;
+    use uuid::Uuid;
 
     #[tokio::test]
     async fn test_audio_handler() {
-        // assert!(
-        //     AudioHandler {}
-        //         .process(PacketData::new(
-        //             Default::default(),
-        //             PacketId::AudioPacket,
-        //             AudioPacket::default().encode().unwrap()
-        //         ))
-        //         .await
-        //         .is_ok(),
-        //     "Expected handler to process packet"
-        // );
+        let clients = Arc::new(Mutex::new(HashMap::new()));
+        let (tx, mut _read_tx) = mpsc::channel(1);
+        {
+            clients
+                .lock()
+                .await
+                .insert(Uuid::new_v4(), Client::new(Uuid::new_v4(), tx));
+        }
+
+        assert!(
+            AudioHandler(clients)
+                .process(PacketData::new(
+                    Default::default(),
+                    PacketId::AudioPacket,
+                    AudioPacket {
+                        track: vec![1, 2, 3, 4, 5]
+                    }
+                    .encode()
+                    .unwrap()
+                ))
+                .await
+                .is_ok(),
+            "Expected handler to process packet"
+        );
     }
 
     #[tokio::test]
