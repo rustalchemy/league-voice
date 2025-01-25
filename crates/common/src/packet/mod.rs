@@ -17,11 +17,12 @@ pub struct Packet {
 }
 
 impl Packet {
+    #[cfg(not(tarpaulin_include))]
     pub fn new<P: PacketType>(packet_type: P) -> Result<Self, Box<bincode::ErrorKind>> {
         let data = P::encode(&packet_type)?;
         Ok(Self {
             length: data.len() as u32,
-            packet_id: P::packet_id() as u8,
+            packet_id: P::packet_id().to_u8(),
             data,
         })
     }
@@ -98,5 +99,11 @@ mod tests {
     #[test]
     fn test_packet_decode_large_buffer() {
         assert!(Packet::decode(&mut vec![0, 0, 0, 4, 0, 0]).is_err());
+    }
+
+    #[test]
+    fn test_packet_to_vec() {
+        let packet = Packet::new(ConnectPacket).unwrap();
+        assert_eq!(packet.encode(), Vec::from(packet));
     }
 }

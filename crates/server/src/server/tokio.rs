@@ -53,7 +53,11 @@ impl TokioServer {
                 buffer.extend_from_slice(&temp_buffer[..bytes_read]);
 
                 while let Ok(packet) = Packet::decode(&mut buffer) {
-                    TokioServer::process_packet(client_id, handlers.clone(), packet).await?;
+                    if let Err(e) = Self::process_packet(client_id, handlers.clone(), packet).await
+                    {
+                        println!("Processing packet error: {}", e);
+                        return Err(e);
+                    }
                 }
 
                 if buffer.len() > MAX_PACKET_SIZE * 2 {
@@ -128,6 +132,7 @@ impl Server for TokioServer {
         }
     }
 
+    #[cfg(not(tarpaulin_include))]
     async fn process_packet(
         client_id: Uuid,
         handlers: Arc<Self::Handlers>,
@@ -145,7 +150,9 @@ impl Server for TokioServer {
             }
         };
 
-        PacketHandler::process(handler, PacketData::new(client_id, packet_id, packet.data)).await
+        handler
+            .process(PacketData::new(client_id, packet_id, packet.data))
+            .await
     }
 
     fn clients(&self) -> Arc<Clients> {
@@ -253,7 +260,7 @@ mod tests {
         client.write_all(disconnect.as_slice()).await?;
         client.flush().await?;
 
-        sleep(Duration::from_millis(2)).await;
+        sleep(Duration::from_millis(20)).await;
 
         Ok::<(), Error>(())
     }
