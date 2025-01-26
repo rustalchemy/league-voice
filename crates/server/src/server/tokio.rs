@@ -4,7 +4,7 @@ use crate::{
     packets::{PacketData, PacketHandler},
     server::client::Client,
 };
-use common::packet::{ids::PacketId, Packet};
+use common::packet::{ids::PacketId, Packet, MAX_PACKET_SIZE};
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -13,8 +13,6 @@ use tokio::{
     sync::Mutex,
 };
 use uuid::Uuid;
-
-const MAX_PACKET_SIZE: usize = 512;
 
 type PacketHandlerMap = HashMap<u8, Box<dyn PacketHandler>>;
 
@@ -50,6 +48,7 @@ impl TokioServer {
                     return Err(ServerError::ConnectionClosedByPeer);
                 }
 
+                // println!("Bytes read: {}", bytes_read);
                 buffer.extend_from_slice(&temp_buffer[..bytes_read]);
 
                 while let Ok(packet) = Packet::decode(&mut buffer) {
@@ -103,6 +102,7 @@ impl Server for TokioServer {
 
     async fn run(&mut self, addr: Cow<'_, str>) -> Result<(), ServerError> {
         let listener = TcpListener::bind(Cow::into_owned(addr.clone())).await?;
+        println!("Server started on: {}", addr);
 
         let handlers = self.handlers.clone();
         let clients = self.clients.clone();

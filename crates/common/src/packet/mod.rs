@@ -9,6 +9,8 @@ use error::DecodeError;
 use packet_type::PacketType;
 use serde::{Deserialize, Serialize};
 
+pub const MAX_PACKET_SIZE: usize = 1024;
+
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct Packet {
     pub length: u32,
@@ -79,7 +81,7 @@ mod tests {
         assert_eq!(packet.packet_id, 1);
         assert_eq!(packet.data, vec![]);
 
-        let packet = Packet::new(AudioPacket { track: vec![1] }).unwrap();
+        let packet = Packet::new(AudioPacket { track: vec![255] }).unwrap();
         assert_eq!(packet.length, 9);
         assert_eq!(packet.packet_id, 2);
         assert_eq!(packet.data, vec![1, 0, 0, 0, 0, 0, 0, 0, 1]);

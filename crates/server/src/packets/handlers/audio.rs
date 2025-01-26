@@ -5,7 +5,7 @@ use crate::{
     packets::{PacketData, PacketHandler},
     server::client::Clients,
 };
-use common::packet::ids::PacketId;
+use common::packet::{ids::PacketId, packet_type::PacketType, AudioPacket, Packet};
 
 pub struct AudioHandler(pub Arc<Clients>);
 
@@ -16,14 +16,24 @@ impl PacketHandler for AudioHandler {
             return Err(ServerError::InvalidHandlerPacketId);
         }
 
+        let packet = AudioPacket::decode(&data.data).map_err(|_| ServerError::InvalidPacket)?;
+        println!("Packet: {:?}", packet.track);
+        assert!(data.data == packet.encode().unwrap());
+
+        let packet = Packet::new(packet).map_err(|_| ServerError::InvalidPacket)?;
+        let encoded_packet = packet.encode();
+
+        println!("Encoded packet: {:?}", encoded_packet);
+
         for client in self.0.lock().await.values() {
-            if client.id() != data.client_id {
-                client.send(&data.packet).await?;
-                println!(
-                    "🎙️ {:.8} -> {:.8}",
-                    data.client_id.to_string(),
-                    client.id().to_string()
-                );
+            if client.id() == data.client_id {
+                client.send(&encoded_packet).await?;
+
+                // println!(
+                //     "🎙️ {:.8} -> {:.8}",
+                //     data.client_id.to_string(),
+                //     client.id().to_string()
+                // );
             }
         }
 

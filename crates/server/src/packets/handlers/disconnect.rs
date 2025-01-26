@@ -15,7 +15,7 @@ impl PacketHandler for DisconnectHandler {
         }
 
         let packet =
-            DisconnectPacket::decode(&data.packet).map_err(|_| ServerError::InvalidPacket)?;
+            DisconnectPacket::decode(&data.data).map_err(|_| ServerError::InvalidPacket)?;
         println!("Processing disconnect packet: {:?}", packet);
         Ok(())
     }
