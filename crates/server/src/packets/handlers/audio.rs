@@ -17,13 +17,8 @@ impl PacketHandler for AudioHandler {
         }
 
         let packet = AudioPacket::decode(&data.data).map_err(|_| ServerError::InvalidPacket)?;
-        println!("Packet: {:?}", packet.track);
-        assert!(data.data == packet.encode().unwrap());
-
         let packet = Packet::new(packet).map_err(|_| ServerError::InvalidPacket)?;
         let encoded_packet = packet.encode();
-
-        println!("Encoded packet: {:?}", encoded_packet);
 
         for client in self.0.lock().await.values() {
             if client.id() == data.client_id {

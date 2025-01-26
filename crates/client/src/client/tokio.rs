@@ -36,16 +36,9 @@ impl<A: AudioHandler + 'static> Client<A> for TokioClient<A> {
                     return Err(ClientError::ConnectionClosedByPeer);
                 }
 
-                // println!("Bytes read: {}", bytes_read);
                 buffer.extend_from_slice(&temp_buffer[..bytes_read]);
-
                 while let Ok(packet) = Packet::decode(&mut buffer) {
-                    println!("Packet: {:?}", packet.data);
-
-                    match output_tx.send(packet.data).await {
-                        Ok(_) => {}
-                        Err(err) => eprintln!("Failed to send audio packet: {:?}", err),
-                    };
+                    output_tx.send(packet.data).await?;
                 }
 
                 if buffer.len() > MAX_PACKET_SIZE * 2 {
@@ -65,7 +58,7 @@ impl<A: AudioHandler + 'static> Client<A> for TokioClient<A> {
 
         let audio_handler = self.audio_handler.clone();
         let microphone_handle =
-            tokio::spawn(async move { audio_handler.retrieve(write_tx, output_rx).await });
+            tokio::spawn(async move { audio_handler.start(write_tx, output_rx).await });
 
         select! {
             Ok(read_result) = read_handle => {
@@ -102,8 +95,11 @@ mod tests {
             Ok::<(), std::io::Error>(())
         });
         let client = tokio::spawn(async move {
-            let client =
-                TokioClient::connect(addr.into(), CpalAudioHandler::<OpusAudioCodec>::new()).await;
+            let client = TokioClient::connect(
+                addr.into(),
+                CpalAudioHandler::<OpusAudioCodec>::new().unwrap(),
+            )
+            .await;
             client
         });
         select! {

@@ -9,10 +9,7 @@ mod error;
 #[tokio::main]
 #[cfg(not(tarpaulin_include))]
 async fn main() -> Result<(), ClientError> {
-    let client = TokioClient::connect(
-        "127.0.0.1:1024".into(),
-        CpalAudioHandler::<OpusAudioCodec>::new(),
-    )
-    .await?;
+    let codec = CpalAudioHandler::<OpusAudioCodec>::new()?;
+    let client = TokioClient::connect("127.0.0.1:1024".into(), codec).await?;
     client.run().await
 }

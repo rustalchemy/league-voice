@@ -6,7 +6,7 @@ pub mod cpal;
 
 #[async_trait::async_trait]
 pub trait AudioHandler: Send + Sync {
-    async fn retrieve(
+    async fn start(
         &self,
         input: Sender<Vec<u8>>,
         output: Receiver<Vec<u8>>,
