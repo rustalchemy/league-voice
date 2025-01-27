@@ -88,7 +88,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_tokio_client_connect() {
-        let addr = "127.0.0.1:1070";
+        let addr = "127.0.0.1:8111";
 
         let server = tokio::spawn(async move {
             let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -132,7 +132,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_tokio_client_connect_fail_buffer_zero() {
-        let addr = "127.0.0.1:1071";
+        let addr = "127.0.0.1:8112";
 
         let server = tokio::spawn(async move {
             let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -164,7 +164,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_tokio_client_connect_fail_buffer_overflow() {
-        let addr = "127.0.0.1:1072";
+        let addr = "127.0.0.1:8113";
 
         let server = tokio::spawn(async move {
             let listener = tokio::net::TcpListener::bind(addr).await.unwrap();

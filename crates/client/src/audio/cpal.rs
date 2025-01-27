@@ -37,28 +37,7 @@ pub struct CpalAudioHandler<Codec: AudioCodec> {
 impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
     #[cfg(not(tarpaulin_include))]
     pub fn new() -> Result<Self, ClientError> {
-        #[cfg(all(any(
-            target_os = "linux",
-            target_os = "dragonfly",
-            target_os = "freebsd",
-            target_os = "netbsd"
-        )))]
-        let host = cpal::host_from_id(
-            cpal::available_hosts()
-                .into_iter()
-                .next()
-                .expect("can't find any host"),
-        )
-        .expect("jack host unavailable");
-
-        #[cfg(not(any(
-            target_os = "linux",
-            target_os = "dragonfly",
-            target_os = "freebsd",
-            target_os = "netbsd"
-        )))]
         let host = cpal::default_host();
-
         let current_input_device = match host.default_input_device() {
             Some(device) => device,
             None => return Err(ClientError::NoDevice),
