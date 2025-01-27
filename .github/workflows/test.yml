@@ -10,13 +10,26 @@ env:
 
 jobs:
     build:
-        runs-on: windows-latest
+        runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
+            - name: Set up ALSA configuration
+              run: |
+                  echo 'pcm.!default { type null }' > ~/.asoundrc
+                  echo 'ctl.!default { type hw card 0 }' >> ~/.asoundrc
+                  cat ~/.asoundrc  # Debug: Check the configuration
+            - name: Update apt
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y alsa-utils
+                  sudo apt-get install libasound2-dev libudev-dev
+                  sudo apt-get install pulseaudio
+                  pulseaudio --start
+                  aplay -l  # List available devices
             - name: Install tar
               run: cargo install cargo-tarpaulin
             - name: Build
-              run: cargo build --verbose
+              run: cargo build --target x86_64-unknown-linux-gnu
             - name: Generate coverage report
               run: cargo tarpaulin --out Xml
             - name: Code Coverage Summary Report
