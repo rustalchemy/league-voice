@@ -22,6 +22,8 @@ jobs:
               run: |
                   sudo apt-get update
                   sudo apt-get install -y alsa-utils
+                  sudo apt-get install libasound2-dev libudev-dev
+                  sudo modprobe snd-dummy
                   aplay -l  # List available devices
             - name: Install tar
               run: cargo install cargo-tarpaulin
@@ -36,6 +38,13 @@ jobs:
                   badge: true
                   fail_below_min: 100
                   thresholds: 100
+
+            - name: Add Coverage PR Comment
+              uses: marocchino/sticky-pull-request-comment@v2
+              if: github.event_name == 'pull_request'
+              with:
+                  recreate: true
+                  path: code-coverage-results.md
 
             - name: Coveralls
               uses: coverallsapp/github-action@v2
