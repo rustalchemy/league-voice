@@ -23,6 +23,7 @@ jobs:
                   sudo apt-get update
                   sudo apt-get install -y alsa-utils
                   sudo apt-get install libasound2-dev libudev-dev
+                  apt-file search snd-dummy
                   modprobe snd-dummy
                   modprobe snd-pcm-oss
                   modprobe snd-mixer-oss
