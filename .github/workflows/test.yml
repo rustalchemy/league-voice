@@ -10,25 +10,21 @@ env:
 
 jobs:
     build:
-        runs-on: windows-2019
+        runs-on: windows-latest
         steps:
             - uses: actions/checkout@v4
 
             - name: Audio device
               run: Get-CimInstance Win32_SoundDevice | fl *
+            - name: Start audisvr
+              run: net start audiosrv
             - name: Install Scream
               shell: powershell
               run: |
-                  Start-Service audio*
-                  Invoke-WebRequest https://github.com/duncanthrax/scream/releases/download/3.6/Scream3.6.zip -OutFile C:\Scream3.6.zip
-                  Extract-7Zip -Path C:\Scream3.6.zip -DestinationPath C:\Scream
-                  $cert = (Get-AuthenticodeSignature C:\Scream\Install\driver\Scream.sys).SignerCertificate
-                  $store = [System.Security.Cryptography.X509Certificates.X509Store]::new("TrustedPublisher", "LocalMachine")
-                  $store.Open("ReadWrite")
-                  $store.Add($cert)
-                  $store.Close()
-                  cd C:\Scream\Install\driver
-                  C:\Scream\Install\helpers\devcon install Scream.inf *Scream
+                  Invoke-WebRequest https://github.com/duncanthrax/scream/releases/download/3.8/Scream3.8.zip -OutFile Scream3.8.zip
+                  Expand-Archive -Path Scream3.8.zip -DestinationPath Scream
+                  Import-Certificate -FilePath Scream\Install\driver\x64\Scream.cat -CertStoreLocation Cert:\LocalMachine\TrustedPublisher 
+                  Scream\Install\helpers\devcon-x64.exe install Scream\Install\driver\x64\Scream.inf *Scream
             - name: Audio device
               run: Get-CimInstance Win32_SoundDevice | fl *
             - name: Install tar
