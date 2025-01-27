@@ -14,11 +14,8 @@ pub enum ClientError {
     #[error("failed to play stream: {0}")]
     PlayStreamError(#[from] cpal::PlayStreamError),
 
-    #[error("failed to encode: {0}")]
-    EncodeError(String),
-
-    #[error("failed to decode: {0}")]
-    DecodeError(String),
+    #[error("invalid channel count")]
+    InvalidChannelCount,
 
     #[error("failed within opus: {0}")]
     OpusError(#[from] opus::Error),

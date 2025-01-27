@@ -21,7 +21,7 @@ impl PacketHandler for AudioHandler {
         let encoded_packet = packet.encode();
 
         for client in self.0.lock().await.values() {
-            if client.id() == data.client_id {
+            if client.id() != data.client_id {
                 client.send(&encoded_packet).await?;
 
                 // println!(
@@ -70,6 +70,12 @@ mod tests {
         .encode()
         .unwrap();
 
+        let packet = Packet::new(AudioPacket {
+            track: vec![1, 2, 3, 4, 5],
+        })
+        .unwrap()
+        .encode();
+
         assert!(
             AudioHandler(clients)
                 .process(PacketData::new(
@@ -85,11 +91,11 @@ mod tests {
         select! {
             result = tokio::spawn(async move { read_tx.recv().await }) => {
                 assert!(result.is_ok());
-                assert_eq!(result.unwrap().unwrap(), audio_packet, "Expected packet to be sent to first client");
+                assert_eq!(result.unwrap().unwrap(), packet, "Expected packet to be sent to first client");
             }
             result = tokio::spawn(async move { read_tx_2.recv().await }) => {
                 assert!(result.is_ok());
-                assert_eq!(result.unwrap().unwrap(), audio_packet, "Expected packet to be sent to second client");
+                assert_eq!(result.unwrap().unwrap(), packet, "Expected packet to be sent to second client");
             }
         }
     }

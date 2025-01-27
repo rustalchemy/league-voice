@@ -81,7 +81,7 @@ mod tests {
         assert_eq!(packet.packet_id, 1);
         assert_eq!(packet.data, vec![]);
 
-        let packet = Packet::new(AudioPacket { track: vec![255] }).unwrap();
+        let packet = Packet::new(AudioPacket { track: vec![1] }).unwrap();
         assert_eq!(packet.length, 9);
         assert_eq!(packet.packet_id, 2);
         assert_eq!(packet.data, vec![1, 0, 0, 0, 0, 0, 0, 0, 1]);

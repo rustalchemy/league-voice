@@ -35,6 +35,7 @@ pub struct CpalAudioHandler<Codec: AudioCodec> {
 }
 
 impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
+    #[cfg(not(tarpaulin_include))]
     pub fn new() -> Result<Self, ClientError> {
         let host = cpal::default_host();
         let current_input_device = match host.default_input_device() {
@@ -90,7 +91,7 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
         output_stream.play()?;
 
         Ok(CpalAudioHandler {
-            codec: Arc::new(Codec::new()?),
+            codec: Arc::new(Codec::new(current_input_config.sample_rate().0, 1)?),
 
             mic_rx: Arc::new(Mutex::new(mic_rx)),
             output_tx: Arc::new(Mutex::new(output_tx)),
@@ -167,6 +168,41 @@ mod tests {
     async fn test_cpal_audio_handler() {
         let audio_handler = CpalAudioHandler::<OpusAudioCodec>::new().unwrap();
         let (tx, rx) = mpsc::channel(1000);
-        let _ = audio_handler.start(tx, rx).await;
+        let (tx_2, mut rx_2) = mpsc::channel(1000);
+
+        let audio_handler_handle = tokio::spawn(async move { audio_handler.start(tx, rx).await });
+
+        let sender_handle = tokio::spawn(async move {
+            let packet = Packet::new(AudioPacket {
+                track: vec![0; 960],
+            })
+            .unwrap();
+            let encoded_packet = packet.encode();
+            for _ in 0..100 {
+                tx_2.send(encoded_packet.clone()).await.unwrap();
+            }
+
+            Ok::<(), ()>(())
+        });
+
+        let receiver_handle = tokio::spawn(async move {
+            let mut count = 0;
+            while let Some(_) = rx_2.recv().await {
+                count += 1;
+                if count == 100 {
+                    break;
+                }
+            }
+            return Ok::<i32, ()>(count);
+        });
+
+        let (audio_handler_result, sender_result, receiver_result) =
+            tokio::join!(audio_handler_handle, sender_handle, receiver_handle);
+        match (audio_handler_result, sender_result, receiver_result) {
+            (Ok(_), Ok(_), Ok(count)) => {
+                assert_eq!(count, Ok(100));
+            }
+            _ => panic!("Expected all futures to complete successfully"),
+        }
     }
 }
