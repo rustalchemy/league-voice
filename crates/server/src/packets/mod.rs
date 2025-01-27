@@ -7,7 +7,7 @@ use uuid::Uuid;
 pub struct PacketData {
     client_id: Uuid,
     packet_id: PacketId,
-    packet: Vec<u8>,
+    data: Vec<u8>, // This is the raw packet data,
 }
 
 impl PacketData {
@@ -15,7 +15,7 @@ impl PacketData {
         Self {
             client_id,
             packet_id,
-            packet,
+            data: packet,
         }
     }
 }

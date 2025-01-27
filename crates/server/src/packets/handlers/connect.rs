@@ -14,7 +14,7 @@ impl PacketHandler for ConnectHandler {
             return Err(ServerError::InvalidHandlerPacketId);
         }
 
-        let packet = ConnectPacket::decode(&data.packet).map_err(|_| ServerError::InvalidPacket)?;
+        let packet = ConnectPacket::decode(&data.data).map_err(|_| ServerError::InvalidPacket)?;
         println!("Processing connect packet: {:?}", packet);
         Ok(())
     }
