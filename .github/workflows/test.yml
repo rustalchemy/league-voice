@@ -16,14 +16,14 @@ jobs:
             - name: Install PulseAudio on Ubuntu
               run: |
                   sudo apt-get update
-                  sudo apt install linux-modules-extra-`uname -r`
-                  sudo modprobe snd-dummy
-                  sudo apt-get install -y alsa-utils
+                  sudo apt-get install alsa-utils alsa-base
                   sudo apt-get install libasound2-dev libudev-dev
                   sudo apt-get install pulseaudio
                   pulseaudio --check || pulseaudio --start
                   pactl load-module module-null-sink sink_name=vspeaker sink_properties=device.description=virtual_speaker
                   pactl load-module module-remap-source master=vspeaker.monitor source_name=vmic source_properties=device.description=virtual_mic
+                  sudo apt install linux-modules-extra-`uname -r`
+                  sudo modprobe snd-dummy
             - name: Install tar
               run: cargo install cargo-tarpaulin
             - name: Build
