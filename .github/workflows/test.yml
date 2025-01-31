@@ -30,7 +30,7 @@ jobs:
             - name: Build
               run: cargo build
             - name: Generate coverage report
-              run: cargo tarpaullin --out Xml
+              run: cargo tarpaulin --out Xml
             - name: Code Coverage Summary Report
               uses: irongut/CodeCoverageSummary@v1.3.0
               with:
