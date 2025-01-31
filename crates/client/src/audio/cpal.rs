@@ -174,6 +174,7 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
 
 #[async_trait::async_trait]
 impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
+    #[cfg(not(tarpaulin_include))]
     async fn start(
         &self,
         input_tx: mpsc::Sender<Vec<u8>>,
