@@ -1,8 +1,10 @@
+use std::fmt::Debug;
+
 use crate::error::ClientError;
 
 pub mod opus;
 
-pub trait AudioCodec: Send + Sync {
+pub trait AudioCodec: Send + Sync + Debug {
     fn new(sample_rate: u32, channels: usize) -> Result<Self, ClientError>
     where
         Self: Sized;

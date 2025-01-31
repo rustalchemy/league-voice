@@ -2,6 +2,9 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ClientError {
+    #[error("make sure you have at least one host available")]
+    NoHost,
+
     #[error("failed to create audio device")]
     NoDevice,
 

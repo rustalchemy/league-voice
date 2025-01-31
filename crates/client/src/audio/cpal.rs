@@ -15,7 +15,7 @@ use tokio::{
 };
 
 #[allow(dead_code)]
-struct SendStream(Stream);
+struct SendStream(Option<Stream>);
 
 // Hack to implement Send and Sync for SendStream
 // This is necessary because the Stream type from cpal does not implement Send and Sync
@@ -36,30 +36,58 @@ pub struct CpalAudioHandler<Codec: AudioCodec> {
 
 impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
     #[cfg(not(tarpaulin_include))]
-    pub fn new() -> Result<Self, ClientError> {
-        let host = cpal::default_host();
-        let current_input_device = match host.default_input_device() {
-            Some(device) => device,
-            None => return Err(ClientError::NoDevice),
+    pub fn setup_host(
+        mic_tx: mpsc::Sender<Vec<f32>>,
+        output_rx: std::sync::mpsc::Receiver<Vec<f32>>,
+    ) -> Result<(u32, Option<Stream>, Option<Stream>), ClientError> {
+        use cpal::{SampleRate, SupportedStreamConfig};
+
+        let hosts = match cpal::available_hosts().into_iter().next() {
+            Some(host) => host,
+            None => {
+                println!("No host setup device found");
+                return Err(ClientError::NoHost);
+            }
         };
 
-        let current_input_config = match current_input_device.default_input_config() {
-            Ok(config) => config,
-            Err(err) => return Err(ClientError::DeviceConfig(err.to_string())),
+        let host = match cpal::host_from_id(hosts) {
+            Ok(host) => Some(host),
+            Err(err) => {
+                println!("Cannot create host: {:?}", err);
+                None
+            }
         };
+
+        let host = match host {
+            Some(host) => host,
+            None => {
+                println!("No host device found");
+                return Err(ClientError::NoDevice);
+            }
+        };
+
+        let current_input_device = match host.default_input_device() {
+            Some(device) => device,
+            None => {
+                println!("No input device found");
+                return Err(ClientError::NoDevice);
+            }
+        };
+
+        let current_input_config = SupportedStreamConfig::new(
+            1,
+            SampleRate(48000),
+            cpal::SupportedBufferSize::Range { min: 0, max: 960 },
+            cpal::SampleFormat::F32,
+        );
 
         let current_output_device = match host.default_output_device() {
             Some(device) => device,
-            None => return Err(ClientError::NoDevice),
+            None => {
+                println!("No output device found");
+                return Err(ClientError::NoDevice);
+            }
         };
-
-        let current_output_config = match current_output_device.default_output_config() {
-            Ok(config) => config,
-            Err(err) => return Err(ClientError::DeviceConfig(err.to_string())),
-        };
-
-        let (mic_tx, mic_rx) = mpsc::channel::<Vec<f32>>(20);
-        let (output_tx, output_rx) = std::sync::mpsc::channel::<Vec<f32>>();
 
         let microphone_stream: Stream = current_input_device.build_input_stream(
             &current_input_config.config(),
@@ -71,7 +99,7 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
         )?;
 
         let output_stream = current_output_device.build_output_stream(
-            &current_output_config.config(),
+            &current_input_config.config(),
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                 if let Ok(decoded_data) = output_rx.try_recv() {
                     let len_to_copy = decoded_data.len().min(data.len());
@@ -90,14 +118,36 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
         microphone_stream.play()?;
         output_stream.play()?;
 
+        Ok((
+            current_input_config.sample_rate().0,
+            Some(microphone_stream),
+            Some(output_stream),
+        ))
+    }
+
+    #[cfg(not(tarpaulin_include))]
+    pub fn new() -> Result<Self, ClientError> {
+        let (mic_tx, mic_rx) = mpsc::channel::<Vec<f32>>(20);
+        let (output_tx, output_rx) = std::sync::mpsc::channel::<Vec<f32>>();
+
+        let streams = match Self::setup_host(mic_tx, output_rx) {
+            Ok(sample_rate) => sample_rate,
+            Err(err) => match err {
+                ClientError::NoDevice => (48000, None, None),
+                _ => {
+                    return Err(err);
+                }
+            },
+        };
+
         Ok(CpalAudioHandler {
-            codec: Arc::new(Codec::new(current_input_config.sample_rate().0, 1)?),
+            codec: Arc::new(Codec::new(streams.0, 1)?),
 
             mic_rx: Arc::new(Mutex::new(mic_rx)),
             output_tx: Arc::new(Mutex::new(output_tx)),
 
-            _input_stream: SendStream(microphone_stream),
-            _output_stream: SendStream(output_stream),
+            _input_stream: SendStream(streams.1),
+            _output_stream: SendStream(streams.2),
         })
     }
 }

@@ -13,18 +13,20 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-            - name: Install PulseAudio on Ubuntu
+            - name: Set up ALSA configuration
+              run: |
+                  echo 'pcm.!default { type null }' > ~/.asoundrc
+                  echo 'ctl.!default { type hw card 0 }' >> ~/.asoundrc
+                  cat ~/.asoundrc  # Debug: Check the configuration
+            - name: Update apt
               run: |
                   sudo apt-get update
-                  sudo apt-get install alsa-utils alsa-base
+                  sudo apt-get install -y alsa-utils
                   sudo apt-get install libasound2-dev libudev-dev
                   sudo apt-get install pulseaudio
-                  pulseaudio --check || pulseaudio --start
-                  pactl load-module module-null-sink sink_name=vspeaker sink_properties=device.description=virtual_speaker
-                  pactl load-module module-remap-source master=vspeaker.monitor source_name=vmic source_properties=device.description=virtual_mic
-                  sudo apt install linux-modules-extra-`uname -r`
-                  sudo modprobe snd-dummy
-            - name: Install tar
+                  pulseaudio --start
+                  aplay -l  # List available devices
+            - name: Install cargo-tarpaulin
               run: cargo install cargo-tarpaulin
             - name: Build
               run: cargo build --verbose
@@ -37,16 +39,15 @@ jobs:
                   badge: true
                   fail_below_min: 100
                   thresholds: 100
-
+                  hide_complexity: true
             - name: Add Coverage PR Comment
               uses: marocchino/sticky-pull-request-comment@v2
               if: github.event_name == 'pull_request'
               with:
                   recreate: true
                   path: code-coverage-results.md
-
             - name: Coveralls
               uses: coverallsapp/github-action@v2
               with:
-                  path-to-lcov: ./cobertura.xml
+                  file: cobertura.xml
                   format: cobertura

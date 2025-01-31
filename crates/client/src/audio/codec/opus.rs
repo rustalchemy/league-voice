@@ -3,6 +3,7 @@ use crate::error::ClientError;
 use opus::{Application, Decoder, Encoder};
 use std::sync::Mutex;
 
+#[derive(Debug)]
 pub struct OpusAudioCodec {
     encoder: Mutex<Encoder>,
     decoder: Mutex<Decoder>,
