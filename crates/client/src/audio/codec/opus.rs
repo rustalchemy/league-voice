@@ -20,7 +20,23 @@ impl AudioCodec for OpusAudioCodec {
             _ => return Err(ClientError::InvalidChannelCount),
         };
 
-        let encoder = Encoder::new(sample_rate, channel, Application::Audio)?;
+        let sample_rate = match sample_rate {
+            8000 | 12000 | 16000 | 24000 | 48000 => sample_rate,
+            _ => 48000,
+        };
+
+        println!(
+            "Creating Opus codec with sample rate: {}, channels: {}",
+            sample_rate, channels
+        );
+
+        let encoder = match Encoder::new(sample_rate, channel, Application::Audio) {
+            Ok(encoder) => encoder,
+            Err(err) => {
+                eprintln!("Failed to create Opus encoder: {}", err);
+                return Err(ClientError::OpusError(err));
+            }
+        };
 
         Ok(OpusAudioCodec {
             encoder: Mutex::new(encoder),

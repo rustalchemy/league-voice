@@ -5,7 +5,9 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Stream,
 };
+use cpal::{SampleRate, SupportedStreamConfig};
 use std::sync::Arc;
+use std::u32;
 use tokio::{
     select,
     sync::{
@@ -40,8 +42,6 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
         mic_tx: mpsc::Sender<Vec<f32>>,
         output_rx: std::sync::mpsc::Receiver<Vec<f32>>,
     ) -> Result<(u32, Option<Stream>, Option<Stream>), ClientError> {
-        use cpal::{SampleRate, SupportedStreamConfig};
-
         let hosts = match cpal::available_hosts().into_iter().next() {
             Some(host) => host,
             None => {
@@ -74,12 +74,18 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
             }
         };
 
-        let current_input_config = SupportedStreamConfig::new(
-            1,
-            SampleRate(48000),
-            cpal::SupportedBufferSize::Range { min: 0, max: 960 },
-            cpal::SampleFormat::F32,
-        );
+        let input_config = match current_input_device.default_input_config() {
+            Ok(config) => config,
+            Err(_) => SupportedStreamConfig::new(
+                2,
+                SampleRate(48000),
+                cpal::SupportedBufferSize::Range {
+                    min: 1,
+                    max: u32::MAX,
+                },
+                cpal::SampleFormat::F32,
+            ),
+        };
 
         let current_output_device = match host.default_output_device() {
             Some(device) => device,
@@ -89,8 +95,21 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
             }
         };
 
+        let output_config = match current_output_device.default_output_config() {
+            Ok(config) => config,
+            Err(_) => SupportedStreamConfig::new(
+                2,
+                SampleRate(48000),
+                cpal::SupportedBufferSize::Range {
+                    min: 1,
+                    max: u32::MAX,
+                },
+                cpal::SampleFormat::F32,
+            ),
+        };
+
         let microphone_stream: Stream = current_input_device.build_input_stream(
-            &current_input_config.config(),
+            &input_config.config(),
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
                 let _ = mic_tx.try_send(data.to_vec());
             },
@@ -99,7 +118,7 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
         )?;
 
         let output_stream = current_output_device.build_output_stream(
-            &current_input_config.config(),
+            &output_config.config(),
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                 if let Ok(decoded_data) = output_rx.try_recv() {
                     let len_to_copy = decoded_data.len().min(data.len());
@@ -119,7 +138,7 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
         output_stream.play()?;
 
         Ok((
-            current_input_config.sample_rate().0,
+            input_config.sample_rate().0,
             Some(microphone_stream),
             Some(output_stream),
         ))
@@ -140,8 +159,9 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
             },
         };
 
+        let codec = Codec::new(streams.0, 1)?;
         Ok(CpalAudioHandler {
-            codec: Arc::new(Codec::new(streams.0, 1)?),
+            codec: Arc::new(codec),
 
             mic_rx: Arc::new(Mutex::new(mic_rx)),
             output_tx: Arc::new(Mutex::new(output_tx)),
@@ -213,10 +233,13 @@ impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
 mod tests {
     use super::*;
     use crate::audio::codec::opus::OpusAudioCodec;
+    use std::time::Duration;
+    use tokio::time::sleep;
 
     #[tokio::test]
     async fn test_cpal_audio_handler() {
         let audio_handler = CpalAudioHandler::<OpusAudioCodec>::new().unwrap();
+
         let (tx, rx) = mpsc::channel(1000);
         let (tx_2, mut rx_2) = mpsc::channel(1000);
 
@@ -232,6 +255,8 @@ mod tests {
                 tx_2.send(encoded_packet.clone()).await.unwrap();
             }
 
+            sleep(Duration::from_micros(100)).await;
+
             Ok::<(), ()>(())
         });
 
@@ -246,13 +271,16 @@ mod tests {
             return Ok::<i32, ()>(count);
         });
 
-        let (audio_handler_result, sender_result, receiver_result) =
-            tokio::join!(audio_handler_handle, sender_handle, receiver_handle);
-        match (audio_handler_result, sender_result, receiver_result) {
-            (Ok(_), Ok(_), Ok(count)) => {
-                assert_eq!(count, Ok(100));
+        select! {
+            _ = audio_handler_handle => {
+                panic!("Audio handler exited unexpectedly");
+            },
+            _ = sender_handle => {
+                panic!("Sender exited unexpectedly");
+            },
+            Ok(result) = receiver_handle => {
+                assert_eq!(result.unwrap(), 100, "Receiver did not receive all packets");
             }
-            _ => panic!("Expected all futures to complete successfully"),
-        }
+        };
     }
 }

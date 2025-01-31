@@ -8,9 +8,6 @@ pub enum ClientError {
     #[error("failed to create audio device")]
     NoDevice,
 
-    #[error("failed to configure audio device: {0}")]
-    DeviceConfig(String),
-
     #[error("failed to build stream: {0}")]
     BuildStreamError(#[from] cpal::BuildStreamError),
 

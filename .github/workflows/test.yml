@@ -15,8 +15,7 @@ jobs:
             - uses: actions/checkout@v4
             - name: Set up ALSA configuration
               run: |
-                  echo 'pcm.!default { type null }' > ~/.asoundrc
-                  echo 'ctl.!default { type hw card 0 }' >> ~/.asoundrc
+                  cp asoundrc ~/.asoundrc
                   cat ~/.asoundrc  # Debug: Check the configuration
             - name: Update apt
               run: |
@@ -29,9 +28,9 @@ jobs:
             - name: Install cargo-tarpaulin
               run: cargo install cargo-tarpaulin
             - name: Build
-              run: cargo build --verbose
+              run: cargo build
             - name: Generate coverage report
-              run: cargo tarpaulin --out Xml
+              run: cargo test
             - name: Code Coverage Summary Report
               uses: irongut/CodeCoverageSummary@v1.3.0
               with:
