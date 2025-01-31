@@ -78,123 +78,123 @@ impl<A: AudioHandler + 'static> Client<A> for TokioClient<A> {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::audio::{codec::opus::OpusAudioCodec, cpal::CpalAudioHandler};
-//     use common::packet::AudioPacket;
-//     use std::time::Duration;
-//     use tokio::{select, time::sleep};
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::audio::{codec::opus::OpusAudioCodec, cpal::CpalAudioHandler};
+    use common::packet::AudioPacket;
+    use std::time::Duration;
+    use tokio::{select, time::sleep};
 
-//     #[tokio::test]
-//     async fn test_tokio_client_connect() {
-//         let addr = "127.0.0.1:8111";
+    #[tokio::test]
+    async fn test_tokio_client_connect() {
+        let addr = "127.0.0.1:8111";
 
-//         let server = tokio::spawn(async move {
-//             let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-//             let (mut socket, _) = listener.accept().await.unwrap();
+        let server = tokio::spawn(async move {
+            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+            let (mut socket, _) = listener.accept().await.unwrap();
 
-//             let packet = Packet::new(AudioPacket {
-//                 track: vec![0; 960],
-//             })
-//             .unwrap()
-//             .encode();
+            let packet = Packet::new(AudioPacket {
+                track: vec![0; 960],
+            })
+            .unwrap()
+            .encode();
 
-//             for _ in 0..10 {
-//                 socket.write_all(&packet).await.unwrap();
-//             }
-//             socket.flush().await.unwrap();
+            for _ in 0..10 {
+                socket.write_all(&packet).await.unwrap();
+            }
+            socket.flush().await.unwrap();
 
-//             let mut buf = [0; 1024];
-//             let _ = socket.read(&mut buf).await;
-//             drop(socket);
+            let mut buf = [0; 1024];
+            let _ = socket.read(&mut buf).await;
+            drop(socket);
 
-//             Ok::<(), std::io::Error>(())
-//         });
-//         let client = tokio::spawn(async move {
-//             let client = TokioClient::connect(
-//                 addr.into(),
-//                 CpalAudioHandler::<OpusAudioCodec>::new().unwrap(),
-//             )
-//             .await
-//             .unwrap();
-//             client.run().await
-//         });
-//         select! {
-//             Ok(result) = server => {
-//                 assert!(result.is_ok(), "expected server to start");
-//             },
-//             Ok(result) = client => {
-//                 assert!(result.is_ok(), "expected client to connect");
-//             }
-//         }
-//     }
+            Ok::<(), std::io::Error>(())
+        });
+        let client = tokio::spawn(async move {
+            let client = TokioClient::connect(
+                addr.into(),
+                CpalAudioHandler::<OpusAudioCodec>::new().unwrap(),
+            )
+            .await
+            .unwrap();
+            client.run().await
+        });
+        select! {
+            Ok(result) = server => {
+                assert!(result.is_ok(), "expected server to start");
+            },
+            Ok(result) = client => {
+                assert!(result.is_ok(), "expected client to connect");
+            }
+        }
+    }
 
-//     #[tokio::test]
-//     async fn test_tokio_client_connect_fail_buffer_zero() {
-//         let addr = "127.0.0.1:8112";
+    #[tokio::test]
+    async fn test_tokio_client_connect_fail_buffer_zero() {
+        let addr = "127.0.0.1:8112";
 
-//         let server = tokio::spawn(async move {
-//             let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-//             let (socket, _) = listener.accept().await.unwrap();
+        let server = tokio::spawn(async move {
+            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+            let (socket, _) = listener.accept().await.unwrap();
 
-//             drop(socket);
+            drop(socket);
 
-//             sleep(Duration::from_millis(10)).await;
-//             Ok::<(), std::io::Error>(())
-//         });
-//         let client = tokio::spawn(async move {
-//             let client = TokioClient::connect(
-//                 addr.into(),
-//                 CpalAudioHandler::<OpusAudioCodec>::new().unwrap(),
-//             )
-//             .await
-//             .unwrap();
-//             client.run().await
-//         });
-//         select! {
-//             Ok(result) = server => {
-//                 assert!(result.is_ok(), "expected server to start");
-//             },
-//             Ok(result) = client => {
-//                 assert!(result.is_err(), "expected client to error");
-//             }
-//         }
-//     }
+            sleep(Duration::from_millis(10)).await;
+            Ok::<(), std::io::Error>(())
+        });
+        let client = tokio::spawn(async move {
+            let client = TokioClient::connect(
+                addr.into(),
+                CpalAudioHandler::<OpusAudioCodec>::new().unwrap(),
+            )
+            .await
+            .unwrap();
+            client.run().await
+        });
+        select! {
+            Ok(result) = server => {
+                assert!(result.is_ok(), "expected server to start");
+            },
+            Ok(result) = client => {
+                assert!(result.is_err(), "expected client to error");
+            }
+        }
+    }
 
-//     #[tokio::test]
-//     async fn test_tokio_client_connect_fail_buffer_overflow() {
-//         let addr = "127.0.0.1:8113";
+    #[tokio::test]
+    async fn test_tokio_client_connect_fail_buffer_overflow() {
+        let addr = "127.0.0.1:8113";
 
-//         let server = tokio::spawn(async move {
-//             let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-//             let (mut socket, _) = listener.accept().await.unwrap();
-//             let packet = [1; 4 * 1024];
-//             for _ in 0..10 {
-//                 socket.write_all(&packet).await.unwrap();
-//             }
-//             socket.flush().await.unwrap();
+        let server = tokio::spawn(async move {
+            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let packet = [1; 4 * 1024];
+            for _ in 0..10 {
+                socket.write_all(&packet).await.unwrap();
+            }
+            socket.flush().await.unwrap();
 
-//             sleep(Duration::from_millis(10)).await;
+            sleep(Duration::from_millis(10)).await;
 
-//             Ok::<(), std::io::Error>(())
-//         });
-//         let client = tokio::spawn(async move {
-//             let client = TokioClient::connect(
-//                 addr.into(),
-//                 CpalAudioHandler::<OpusAudioCodec>::new().unwrap(),
-//             )
-//             .await
-//             .unwrap();
-//             client.run().await
-//         });
-//         select! {
-//             Ok(result) = server => {
-//                 assert!(result.is_ok(), "expected server to start");
-//             },
-//             Ok(result) = client => {
-//                 assert!(result.is_err(), "expected client to error");
-//             }
-//         }
-//     }
-// }
+            Ok::<(), std::io::Error>(())
+        });
+        let client = tokio::spawn(async move {
+            let client = TokioClient::connect(
+                addr.into(),
+                CpalAudioHandler::<OpusAudioCodec>::new().unwrap(),
+            )
+            .await
+            .unwrap();
+            client.run().await
+        });
+        select! {
+            Ok(result) = server => {
+                assert!(result.is_ok(), "expected server to start");
+            },
+            Ok(result) = client => {
+                assert!(result.is_err(), "expected client to error");
+            }
+        }
+    }
+}
