@@ -9,6 +9,8 @@ use error::DecodeError;
 use packet_type::PacketType;
 use serde::{Deserialize, Serialize};
 
+pub const MAX_PACKET_SIZE: usize = 1024;
+
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct Packet {
     pub length: u32,

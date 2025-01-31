@@ -13,12 +13,24 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-            - name: Install tar
+            - name: Set up ALSA configuration
+              run: |
+                  cp asoundrc ~/.asoundrc
+                  cat ~/.asoundrc  # Debug: Check the configuration
+            - name: Update apt
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y alsa-utils
+                  sudo apt-get install libasound2-dev libudev-dev
+                  sudo apt-get install pulseaudio
+                  pulseaudio --start
+                  aplay -l  # List available devices
+            - name: Install cargo-tarpaulin
               run: cargo install cargo-tarpaulin
             - name: Build
-              run: cargo build --verbose
+              run: cargo build
             - name: Generate coverage report
-              run: cargo tarpaulin --out Xml
+              run: cargo tarpaulin --out Xml -v
             - name: Code Coverage Summary Report
               uses: irongut/CodeCoverageSummary@v1.3.0
               with:
@@ -26,9 +38,9 @@ jobs:
                   badge: true
                   fail_below_min: 100
                   thresholds: 100
-
+                  hide_complexity: true
             - name: Coveralls
               uses: coverallsapp/github-action@v2
               with:
-                  path-to-lcov: ./cobertura.xml
+                  file: cobertura.xml
                   format: cobertura

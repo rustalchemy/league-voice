@@ -13,7 +13,7 @@ pub mod server;
 async fn main() -> Result<(), ServerError> {
     let addr = std::env::args()
         .nth(1)
-        .unwrap_or_else(|| "127.0.0.1:1024".to_string());
+        .unwrap_or_else(|| "127.0.0.1:8080".to_string());
 
     let mut server = TokioServer::new();
     server.add_handler(
