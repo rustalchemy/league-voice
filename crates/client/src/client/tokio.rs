@@ -105,10 +105,6 @@ mod tests {
             }
             socket.flush().await.unwrap();
 
-            let mut buf = [0; 1024];
-            let _ = socket.read(&mut buf).await;
-            drop(socket);
-
             Ok::<(), std::io::Error>(())
         });
         let client = tokio::spawn(async move {
