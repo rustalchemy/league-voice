@@ -1,3 +1,4 @@
+use super::DeviceHandler;
 use super::{codec::AudioCodec, AudioHandler, DeviceInfo, DeviceType};
 use crate::error::ClientError;
 use common::packet::{packet_type::PacketType, AudioPacket, Packet};
@@ -93,11 +94,11 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
         Ok(devices)
     }
 
-    fn find_default(
+    fn get_device_config(
         device_name: &str,
         device_infos: &Vec<DeviceInfo>,
         devices: &mut Devices,
-    ) -> Result<(SupportedStreamConfig, Device), ClientError> {
+    ) -> Result<(Device, DeviceInfo), ClientError> {
         let device_info = device_infos
             .iter()
             .find(|device| device.name == device_name);
@@ -108,14 +109,13 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
             }
         };
 
-        let config = device_info.config.clone();
         let device = match devices.find(|device| device.name().unwrap_or_default() == device_name) {
             Some(device) => device,
             None => {
                 return Err(ClientError::NoDevice);
             }
         };
-        Ok((config, device))
+        Ok((device, device_info.clone()))
     }
 
     fn setup_input_stream(
@@ -123,7 +123,7 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
         config: &SupportedStreamConfig,
         mic_tx: mpsc::Sender<Vec<f32>>,
     ) -> Result<Stream, ClientError> {
-        let input_stream = device.build_input_stream(
+        let stream = device.build_input_stream(
             &config.config(),
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
                 let _ = mic_tx.try_send(data.to_vec());
@@ -131,7 +131,8 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
             |err| eprintln!("Input stream error: {:?}", err),
             None,
         )?;
-        Ok(input_stream)
+        stream.play()?;
+        Ok(stream)
     }
 
     fn setup_output_stream(
@@ -139,7 +140,7 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
         config: &SupportedStreamConfig,
         output_rx: std::sync::mpsc::Receiver<Vec<f32>>,
     ) -> Result<Stream, ClientError> {
-        let output_stream = device.build_output_stream(
+        let stream = device.build_output_stream(
             &config.config(),
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                 if let Ok(decoded_data) = output_rx.try_recv() {
@@ -156,7 +157,8 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
             |err| eprintln!("Output stream error: {:?}", err),
             None,
         )?;
-        Ok(output_stream)
+        stream.play()?;
+        Ok(stream)
     }
 
     fn init_device_type(
@@ -166,27 +168,44 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
         output_rx: Option<std::sync::mpsc::Receiver<Vec<f32>>>,
     ) -> Result<(Stream, Vec<DeviceInfo>), ClientError> {
         let mut devices = host.devices()?;
-        let devices_info = Self::get_host_devices(&device_type, &host)?;
+        let mut devices_info = Self::get_host_devices(&device_type, &host)?;
         let default_device = devices_info.iter().find(|device| device.default).unwrap();
 
-        let (config, device) =
-            Self::find_default(&default_device.name, &devices_info, &mut devices)?;
+        let (device, device_info) =
+            Self::get_device_config(&default_device.name, &devices_info, &mut devices)?;
 
         let stream = match device_type {
-            DeviceType::Input => Self::setup_input_stream(&device, &config, mic_tx.unwrap())?,
-            DeviceType::Output => Self::setup_output_stream(&device, &config, output_rx.unwrap())?,
+            DeviceType::Input => {
+                Self::setup_input_stream(&device, &device_info.config, mic_tx.unwrap())?
+            }
+            DeviceType::Output => {
+                Self::setup_output_stream(&device, &device_info.config, output_rx.unwrap())?
+            }
         };
 
         println!("Starting {} stream", device_type);
-        println!("Config: {:?}", config);
-        println!("Sample rate: {:?}", config.sample_rate().0);
-        println!("Buffer size: {:?}", config.buffer_size());
-        println!("Sample format: {:?}", config.sample_format());
-        println!("Channels: {:?}", config.channels());
+        println!("Config: {:?}", device_info);
+        println!("Sample rate: {:?}", device_info.config.sample_rate().0);
+        println!("Buffer size: {:?}", device_info.config.buffer_size());
+        println!("Sample format: {:?}", device_info.config.sample_format());
+        println!("Channels: {:?}", device_info.config.channels());
         println!("Device name: {:?}", device.name());
         println!();
 
-        stream.play()?;
+        let device_name = device.name().unwrap_or_default();
+        let new_device_info = DeviceInfo {
+            name: device_name.clone(),
+            device_type,
+            active: true,
+            default: device_info.default,
+            config: device_info.config,
+        };
+
+        for device_info in devices_info.iter_mut() {
+            if device_info.name == device_name {
+                *device_info = new_device_info.clone();
+            }
+        }
 
         Ok((stream, devices_info))
     }
@@ -276,7 +295,10 @@ impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
             }
         }
     }
+}
 
+#[async_trait::async_trait]
+impl<Codec: AudioCodec> DeviceHandler for CpalAudioHandler<Codec> {
     fn get_devices(&self, device_type: DeviceType) -> Vec<DeviceInfo> {
         self.devices
             .iter()
@@ -285,30 +307,42 @@ impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
             .collect()
     }
 
-    async fn set_active_device(
-        &mut self,
-        device_type: DeviceType,
-        device_name: String,
-    ) -> Result<(), ClientError> {
+    async fn set_active_device(&mut self, device_name: String) -> Result<(), ClientError> {
         let host = Self::get_host()?;
         let mut devices = host.devices()?;
 
-        let devices_info = Self::get_host_devices(&device_type, &host)?;
-        let (config, device) = Self::find_default(&device_name, &devices_info, &mut devices)?;
+        let device_info = match self
+            .devices
+            .iter()
+            .find(|device| device.name == device_name)
+        {
+            Some(device) => device,
+            None => {
+                return Err(ClientError::NoDevice);
+            }
+        };
 
-        match device_type {
+        let devices_info = Self::get_host_devices(&device_info.device_type, &host)?;
+        let (device, config) = Self::get_device_config(&device_name, &devices_info, &mut devices)?;
+
+        match &device_info.device_type {
             DeviceType::Input => {
                 let (mic_tx, mic_rx) = mpsc::channel::<Vec<f32>>(20);
 
-                self.input_stream =
-                    SendStream(Some(Self::setup_input_stream(&device, &config, mic_tx)?));
+                self.input_stream = SendStream(Some(Self::setup_input_stream(
+                    &device,
+                    &config.config,
+                    mic_tx,
+                )?));
                 self.mic_rx = Arc::new(Mutex::new(mic_rx));
             }
             DeviceType::Output => {
                 let (output_tx, output_rx) = std::sync::mpsc::channel::<Vec<f32>>();
 
                 self.output_stream = SendStream(Some(Self::setup_output_stream(
-                    &device, &config, output_rx,
+                    &device,
+                    &config.config,
+                    output_rx,
                 )?));
                 self.output_tx = Arc::new(Mutex::new(output_tx));
             }

@@ -24,8 +24,8 @@ async function invoke_typed<T>(cmd: string): Promise<T> {
 
 function AudioDeviceSelector() {
     const [devices, setDevices] = useState<Array<DeviceInfo>>(new Array<DeviceInfo>());
-    const [inputDevice, setInputDevice] = useState<string | null>(null);
-    const [outputDevice, setOutputDevice] = useState<string | null>(null);
+    const [inputDevice, setInputDevice] = useState<string | undefined>(undefined);
+    const [outputDevice, setOutputDevice] = useState<string | undefined>(undefined);
 
     useEffect(() => {
         async function getDevices() {
@@ -33,6 +33,12 @@ function AudioDeviceSelector() {
                 let res = await invoke_typed<Array<DeviceInfo>>("get_devices");
                 console.log(res);
                 setDevices(res || new Array<DeviceInfo>());
+
+                let input = res.find((d) => d.device_type === DeviceType.Input && d.active);
+                setInputDevice(input?.name);
+
+                let output = res.find((d) => d.device_type === DeviceType.Output && d.active);
+                setOutputDevice(output?.name);
             } catch (err) {
                 console.error("Error fetching devices:", err);
             }
@@ -43,7 +49,7 @@ function AudioDeviceSelector() {
     async function handleOutputSelect(deviceId: string) {
         setOutputDevice(deviceId);
         try {
-            let res = await invoke("set_output_device", { deviceId });
+            let res = await invoke("set_device", { deviceName: deviceId });
             console.log(res);
         } catch (err) {
             console.error("Failed to set output device:", err);
@@ -54,7 +60,7 @@ function AudioDeviceSelector() {
         <div className="p-4 flex flex-col gap-2">
             <h2 className="text-lg font-bold mb-2">Audio Device Selector</h2>
             <Label htmlFor="microphone">Microphone</Label>
-            <Select onValueChange={setInputDevice}>
+            <Select onValueChange={setInputDevice} value={inputDevice}>
                 <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select Microphone" />
                 </SelectTrigger>
@@ -70,7 +76,7 @@ function AudioDeviceSelector() {
             </Select>
 
             <Label htmlFor="speakers">Speakers</Label>
-            <Select onValueChange={handleOutputSelect}>
+            <Select onValueChange={handleOutputSelect} value={outputDevice}>
                 <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select Output" />
                 </SelectTrigger>

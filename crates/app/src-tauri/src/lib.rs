@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use tokio::sync::Mutex;
 
 use client::{
-    audio::{codec::opus::OpusAudioCodec, cpal::CpalAudioHandler, AudioHandler},
+    audio::{codec::opus::OpusAudioCodec, cpal::CpalAudioHandler, AudioHandler, DeviceHandler},
     client::{tokio::TokioClient, Client},
 };
 use tauri::{Manager, State};
@@ -35,6 +37,24 @@ async fn get_devices(state: State<'_, Mutex<AppState>>) -> Result<String, ()> {
     Ok(devices)
 }
 
+#[tauri::command]
+async fn set_device(device_name: String, state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+    let state = state.inner().lock().await;
+
+    let mut audio_handler = state.client.audio_handler();
+    let audio_handler = match Arc::get_mut(&mut audio_handler) {
+        Some(handler) => handler,
+        None => {
+            return Err("Failed to get mutable reference to audio handler".to_string());
+        }
+    };
+
+    match audio_handler.set_active_device(device_name).await {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 struct AppState {
     client: TokioClient<CpalAudioHandler<OpusAudioCodec>>,
 }
@@ -65,7 +85,7 @@ pub fn run() {
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, get_devices])
+        .invoke_handler(tauri::generate_handler![greet, get_devices, set_device])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

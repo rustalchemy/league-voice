@@ -41,11 +41,10 @@ pub trait AudioHandler: Send + Sync {
         input: Sender<Vec<u8>>,
         output: Receiver<Vec<u8>>,
     ) -> Result<(), ClientError>;
+}
 
+#[async_trait::async_trait]
+pub trait DeviceHandler {
     fn get_devices(&self, device_type: DeviceType) -> Vec<DeviceInfo>;
-    async fn set_active_device(
-        &mut self,
-        device_type: DeviceType,
-        device_name: String,
-    ) -> Result<(), ClientError>;
+    async fn set_active_device(&mut self, device_name: String) -> Result<(), ClientError>;
 }
