@@ -13,6 +13,6 @@ thiserror = "2.0"
 common = { path = "../common" }
 bincode = "1.3.3"
 
-cpal = { version = "0.15.3" }
+cpal = { version = "0.15.3", features = ["wasm-bindgen"] }
 opus = "0.3"
 async-trait = "0.1"

@@ -4,3 +4,4 @@ cobertura.xml
 dist/
 target/
 gen/schemas/
+node_modules/

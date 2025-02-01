@@ -1,3 +1,3 @@
-mod audio;
-mod client;
-mod error;
+pub mod audio;
+pub mod client;
+pub mod error;
