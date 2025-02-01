@@ -1,12 +1,12 @@
-use std::sync::Arc;
-
-use tokio::sync::Mutex;
-
 use client::{
-    audio::{codec::opus::OpusAudioCodec, cpal::CpalAudioHandler, AudioHandler, DeviceHandler},
+    audio::{
+        codec::opus::OpusAudioCodec, cpal::CpalAudioHandler, cpal_device::CpalDeviceHandler,
+        DeviceHandler,
+    },
     client::{tokio::TokioClient, Client},
 };
 use tauri::{Manager, State};
+use tokio::sync::Mutex;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -18,15 +18,10 @@ fn greet(name: &str) -> String {
 async fn get_devices(state: State<'_, Mutex<AppState>>) -> Result<String, ()> {
     let state = state.inner().lock().await;
 
-    let out_devices = state
-        .client
-        .audio_handler()
-        .get_devices(client::audio::DeviceType::Output);
+    let audio_handler = state.client.device_handler();
 
-    let in_devices = state
-        .client
-        .audio_handler()
-        .get_devices(client::audio::DeviceType::Input);
+    let out_devices = audio_handler.get_devices(client::audio::DeviceType::Output);
+    let in_devices = audio_handler.get_devices(client::audio::DeviceType::Input);
 
     let mut devices = vec![];
     devices.extend(out_devices);
@@ -40,23 +35,20 @@ async fn get_devices(state: State<'_, Mutex<AppState>>) -> Result<String, ()> {
 #[tauri::command]
 async fn set_device(device_name: String, state: State<'_, Mutex<AppState>>) -> Result<(), String> {
     let state = state.inner().lock().await;
+    let audio_handler = state.client.device_handler();
 
-    let mut audio_handler = state.client.audio_handler();
-    let audio_handler = match Arc::get_mut(&mut audio_handler) {
-        Some(handler) => handler,
-        None => {
-            return Err("Failed to get mutable reference to audio handler".to_string());
-        }
-    };
-
-    match audio_handler.set_active_device(device_name).await {
-        Ok(_) => Ok(()),
-        Err(e) => Err(e.to_string()),
-    }
+    // match audio_handler
+    //     .set_active_device(device_name, mic_tx, output_rx)
+    //     .await
+    // {
+    //     Ok(_) => Ok(()),
+    //     Err(e) => Err(e.to_string()),
+    // }
+    Ok(())
 }
 
 struct AppState {
-    client: TokioClient<CpalAudioHandler<OpusAudioCodec>>,
+    client: TokioClient<CpalAudioHandler<OpusAudioCodec>, CpalDeviceHandler>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -90,17 +82,10 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-async fn setup() -> Result<TokioClient<CpalAudioHandler<OpusAudioCodec>>, String> {
-    let codec = match CpalAudioHandler::<OpusAudioCodec>::new() {
-        Ok(codec) => codec,
-        Err(e) => {
-            eprintln!("Failed to create audio codec: {}", e);
-            return Err(e.to_string());
-        }
-    };
-
+async fn setup() -> Result<TokioClient<CpalAudioHandler<OpusAudioCodec>, CpalDeviceHandler>, String>
+{
     let addr = std::borrow::Cow::Borrowed("127.0.0.1:8080");
-    let client = match TokioClient::connect(addr, codec).await {
+    let client = match TokioClient::connect(addr).await {
         Ok(client) => client,
         Err(e) => {
             eprintln!("Failed to connect to server: {}", e);

@@ -1,30 +1,49 @@
-use crate::{audio::AudioHandler, client::Client, error::ClientError};
+use crate::{
+    audio::{AudioHandler, DeviceHandler},
+    client::Client,
+    error::ClientError,
+};
 use common::packet::{Packet, MAX_PACKET_SIZE};
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
     select,
 };
 
-pub struct TokioClient<A: AudioHandler> {
+pub struct TokioClient<A: AudioHandler, D: DeviceHandler> {
     stream: TcpStream,
-    audio_handler: Arc<A>,
+    audio_handler: A,
+    device_handler: D,
+
+    stop_tx: Option<tokio::sync::mpsc::Sender<()>>,
 }
 
 #[async_trait::async_trait]
-impl<A: AudioHandler + 'static> Client<A> for TokioClient<A> {
-    async fn connect(addr: Cow<'_, str>, audio_handler: A) -> Result<Self, ClientError> {
+impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for TokioClient<A, D> {
+    async fn connect(addr: Cow<'_, str>) -> Result<Self, ClientError> {
         let stream = TcpStream::connect(Cow::into_owned(addr.clone())).await?;
+
         Ok(Self {
             stream,
-            audio_handler: Arc::new(audio_handler),
+            audio_handler: A::new()?,
+            device_handler: D::new()?,
+            stop_tx: None,
         })
     }
 
-    async fn run(self) -> Result<(), ClientError> {
-        let (write_tx, mut write_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(32);
-        let (output_tx, output_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(32);
+    async fn run(mut self) -> Result<(), ClientError> {
+        let (packet_sender, mut message_receiver) = tokio::sync::mpsc::channel::<Vec<u8>>(32);
+        let (mesage_transmitter, packet_receiver) = tokio::sync::mpsc::channel::<Vec<u8>>(32);
+        let (stop_tx, mut stop_rx) = tokio::sync::mpsc::channel::<()>(1);
+        self.stop_tx = Some(stop_tx);
+
+        let (mic_tx, mic_rx) = tokio::sync::mpsc::channel::<Vec<f32>>(20);
+        let (output_tx, output_rx) = std::sync::mpsc::channel::<Vec<f32>>();
+
+        self.device_handler
+            .start_defaults(mic_tx, output_rx)
+            .await?;
 
         let (mut read, mut write) = self.stream.into_split();
 
@@ -39,7 +58,7 @@ impl<A: AudioHandler + 'static> Client<A> for TokioClient<A> {
 
                 buffer.extend_from_slice(&temp_buffer[..bytes_read]);
                 while let Ok(packet) = Packet::decode(&mut buffer) {
-                    output_tx.send(packet.data).await?;
+                    mesage_transmitter.send(packet.data).await?;
                 }
 
                 if buffer.len() > MAX_PACKET_SIZE * 2 {
@@ -50,16 +69,24 @@ impl<A: AudioHandler + 'static> Client<A> for TokioClient<A> {
         });
 
         let write_handle = tokio::spawn(async move {
-            while let Some(packet) = write_rx.recv().await {
+            while let Some(packet) = message_receiver.recv().await {
                 write.write_all(&packet).await?;
                 write.flush().await?;
             }
             Ok(())
         });
 
-        let audio_handler = self.audio_handler.clone();
-        let microphone_handle =
-            tokio::spawn(async move { audio_handler.start(write_tx, output_rx).await });
+        let audio_handler = self.audio_handler;
+        let microphone_handle = tokio::spawn(async move {
+            audio_handler
+                .start(packet_sender, packet_receiver, mic_rx, output_tx)
+                .await
+        });
+
+        let stop_handler = tokio::spawn(async move {
+            stop_rx.recv().await;
+            Ok(())
+        });
 
         select! {
             Ok(read_result) = read_handle => {
@@ -74,21 +101,58 @@ impl<A: AudioHandler + 'static> Client<A> for TokioClient<A> {
                 println!("Microphone result: {:?}", microphone_result);
                 Ok(())
             }
+            Ok(stop_result) = stop_handler => {
+                println!("Stop result: {:?}", stop_result);
+                stop_result
+            }
         }
     }
 
-    fn audio_handler(&self) -> Arc<A> {
-        self.audio_handler.clone()
+    fn audio_handler(&self) -> &A {
+        &self.audio_handler
+    }
+
+    fn audio_handler_mut(&mut self) -> &mut A {
+        &mut self.audio_handler
+    }
+
+    fn device_handler(&self) -> &D {
+        &self.device_handler
+    }
+
+    fn device_handler_mut(&mut self) -> &mut D {
+        &mut self.device_handler
+    }
+
+    async fn stop(&self) -> Result<(), ClientError> {
+        let stop_tx = match &self.stop_tx {
+            Some(tx) => tx,
+            None => return Ok(()),
+        };
+
+        match stop_tx.send(()).await {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Failed to send stop signal: {}", e);
+            }
+        }
+
+        self.audio_handler().stop().await?;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::{codec::opus::OpusAudioCodec, cpal::CpalAudioHandler};
+    use crate::audio::{
+        codec::opus::OpusAudioCodec, cpal::CpalAudioHandler, cpal_device::CpalDeviceHandler,
+    };
     use common::packet::AudioPacket;
     use std::time::Duration;
     use tokio::{select, time::sleep};
+
+    pub type TokoClient = TokioClient<CpalAudioHandler<OpusAudioCodec>, CpalDeviceHandler>;
 
     #[tokio::test]
     async fn test_tokio_client_connect() {
@@ -112,12 +176,7 @@ mod tests {
             Ok::<(), std::io::Error>(())
         });
         let client = tokio::spawn(async move {
-            let client = TokioClient::connect(
-                addr.into(),
-                CpalAudioHandler::<OpusAudioCodec>::new().unwrap(),
-            )
-            .await
-            .unwrap();
+            let client = TokoClient::connect(addr.into()).await.unwrap();
             client.run().await
         });
         select! {
@@ -144,12 +203,7 @@ mod tests {
             Ok::<(), std::io::Error>(())
         });
         let client = tokio::spawn(async move {
-            let client = TokioClient::connect(
-                addr.into(),
-                CpalAudioHandler::<OpusAudioCodec>::new().unwrap(),
-            )
-            .await
-            .unwrap();
+            let client = TokoClient::connect(addr.into()).await.unwrap();
             client.run().await
         });
         select! {
@@ -180,12 +234,7 @@ mod tests {
             Ok::<(), std::io::Error>(())
         });
         let client = tokio::spawn(async move {
-            let client = TokioClient::connect(
-                addr.into(),
-                CpalAudioHandler::<OpusAudioCodec>::new().unwrap(),
-            )
-            .await
-            .unwrap();
+            let client = TokoClient::connect(addr.into()).await.unwrap();
             client.run().await
         });
         select! {

@@ -7,6 +7,8 @@ use tokio::sync::mpsc::{Receiver, Sender};
 
 pub mod codec;
 pub mod cpal;
+pub mod cpal_device;
+pub mod cpal_util;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize)]
 pub enum DeviceType {
@@ -35,16 +37,35 @@ pub struct DeviceInfo {
 }
 
 #[async_trait::async_trait]
-pub trait AudioHandler: Send + Sync {
+pub trait AudioHandler: Send + Sync + Sized {
+    fn new() -> Result<Self, ClientError>;
     async fn start(
         &self,
-        input: Sender<Vec<u8>>,
-        output: Receiver<Vec<u8>>,
+        packet_sender: Sender<Vec<u8>>,
+        packet_receiver: Receiver<Vec<u8>>,
+
+        mic_rx: Receiver<Vec<f32>>,
+        output_tx: std::sync::mpsc::Sender<Vec<f32>>,
     ) -> Result<(), ClientError>;
+    async fn stop(&self) -> Result<(), ClientError>;
 }
 
 #[async_trait::async_trait]
-pub trait DeviceHandler {
+pub trait DeviceHandler: Send + Sync + Sized {
+    fn new() -> Result<Self, ClientError>;
+
     fn get_devices(&self, device_type: DeviceType) -> Vec<DeviceInfo>;
-    async fn set_active_device(&mut self, device_name: String) -> Result<(), ClientError>;
+
+    async fn start_defaults(
+        &mut self,
+        mic_tx: Sender<Vec<f32>>,
+        output_rx: std::sync::mpsc::Receiver<Vec<f32>>,
+    ) -> Result<(), ClientError>;
+
+    async fn set_active_device(
+        &mut self,
+        device_name: String,
+        mic_tx: Sender<Vec<f32>>,
+        output_rx: std::sync::mpsc::Receiver<Vec<f32>>,
+    ) -> Result<(), ClientError>;
 }
