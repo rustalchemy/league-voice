@@ -2,19 +2,37 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Label } from "../ui/label";
+import { Button } from "../ui/button";
+
+enum DeviceType {
+    Input = "Input",
+    Output = "Output",
+}
+
+interface DeviceInfo {
+    name: string;
+    device_type: DeviceType;
+    active: boolean;
+    default: boolean;
+}
+
+async function invoke_typed<T>(cmd: string): Promise<T> {
+    let res = await invoke<string>(cmd);
+    let data: T = JSON.parse(res);
+    return data;
+}
 
 function AudioDeviceSelector() {
-    const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+    const [devices, setDevices] = useState<Array<DeviceInfo>>(new Array<DeviceInfo>());
     const [inputDevice, setInputDevice] = useState<string | null>(null);
     const [outputDevice, setOutputDevice] = useState<string | null>(null);
 
     useEffect(() => {
         async function getDevices() {
             try {
-                await navigator.mediaDevices.getUserMedia({ audio: true });
-                const mediaDevices = await navigator.mediaDevices.enumerateDevices();
-                const audioDevices = mediaDevices.filter((device) => device.kind.includes("audio"));
-                setDevices(audioDevices);
+                let res = await invoke_typed<Array<DeviceInfo>>("get_devices");
+                console.log(res);
+                setDevices(res || new Array<DeviceInfo>());
             } catch (err) {
                 console.error("Error fetching devices:", err);
             }
@@ -25,7 +43,8 @@ function AudioDeviceSelector() {
     async function handleOutputSelect(deviceId: string) {
         setOutputDevice(deviceId);
         try {
-            await invoke("", { deviceId });
+            let res = await invoke("set_output_device", { deviceId });
+            console.log(res);
         } catch (err) {
             console.error("Failed to set output device:", err);
         }
@@ -41,10 +60,10 @@ function AudioDeviceSelector() {
                 </SelectTrigger>
                 <SelectContent>
                     {devices
-                        .filter((d) => d.kind === "audioinput")
+                        .filter((d) => d.device_type === DeviceType.Input)
                         .map((device) => (
-                            <SelectItem key={device.deviceId} value={device.deviceId}>
-                                {device.label || "Unknown Microphone"}
+                            <SelectItem key={device.name} value={device.name}>
+                                {device.name || "Unknown Microphone"}
                             </SelectItem>
                         ))}
                 </SelectContent>
@@ -57,14 +76,22 @@ function AudioDeviceSelector() {
                 </SelectTrigger>
                 <SelectContent>
                     {devices
-                        .filter((d) => d.kind === "audiooutput")
+                        .filter((d) => d.device_type === DeviceType.Output)
                         .map((device) => (
-                            <SelectItem key={device.deviceId} value={device.deviceId}>
-                                {device.label || "Unknown Output Device"}
+                            <SelectItem key={device.name} value={device.name}>
+                                {device.name || "Unknown output"}
                             </SelectItem>
                         ))}
                 </SelectContent>
             </Select>
+
+            <Button
+                onClick={() => {
+                    handleOutputSelect(inputDevice || outputDevice || "");
+                }}
+            >
+                Test
+            </Button>
         </div>
     );
 }

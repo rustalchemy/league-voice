@@ -5,24 +5,23 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
     select,
-    sync::Mutex,
 };
 
 pub struct TokioClient<A: AudioHandler> {
     stream: TcpStream,
-    audio_handler: Arc<Mutex<A>>,
+    audio_handler: Arc<A>,
 }
 
+#[async_trait::async_trait]
 impl<A: AudioHandler + 'static> Client<A> for TokioClient<A> {
     async fn connect(addr: Cow<'_, str>, audio_handler: A) -> Result<Self, ClientError> {
         let stream = TcpStream::connect(Cow::into_owned(addr.clone())).await?;
         Ok(Self {
             stream,
-            audio_handler: Arc::new(Mutex::new(audio_handler)),
+            audio_handler: Arc::new(audio_handler),
         })
     }
 
-    #[cfg(not(tarpaulin_include))]
     async fn run(self) -> Result<(), ClientError> {
         let (write_tx, mut write_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(32);
         let (output_tx, output_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(32);
@@ -60,9 +59,7 @@ impl<A: AudioHandler + 'static> Client<A> for TokioClient<A> {
 
         let audio_handler = self.audio_handler.clone();
         let microphone_handle =
-            tokio::spawn(
-                async move { audio_handler.lock().await.start(write_tx, output_rx).await },
-            );
+            tokio::spawn(async move { audio_handler.start(write_tx, output_rx).await });
 
         select! {
             Ok(read_result) = read_handle => {
@@ -78,6 +75,10 @@ impl<A: AudioHandler + 'static> Client<A> for TokioClient<A> {
                 Ok(())
             }
         }
+    }
+
+    fn audio_handler(&self) -> Arc<A> {
+        self.audio_handler.clone()
     }
 }
 

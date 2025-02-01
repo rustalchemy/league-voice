@@ -2,12 +2,13 @@ use std::fmt::Display;
 
 use crate::error::ClientError;
 use ::cpal::SupportedStreamConfig;
+use serde::Serialize;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 pub mod codec;
 pub mod cpal;
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize)]
 pub enum DeviceType {
     Input,
     Output,
@@ -22,19 +23,21 @@ impl Display for DeviceType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DeviceInfo {
     name: String,
     device_type: DeviceType,
     active: bool,
     default: bool,
+
+    #[serde(skip)]
     config: SupportedStreamConfig,
 }
 
 #[async_trait::async_trait]
 pub trait AudioHandler: Send + Sync {
     async fn start(
-        &mut self,
+        &self,
         input: Sender<Vec<u8>>,
         output: Receiver<Vec<u8>>,
     ) -> Result<(), ClientError>;

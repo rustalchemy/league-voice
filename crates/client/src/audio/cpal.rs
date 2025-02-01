@@ -224,7 +224,7 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {
 #[async_trait::async_trait]
 impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
     async fn start(
-        &mut self,
+        &self,
         input_tx: mpsc::Sender<Vec<u8>>,
         mut output_rx: mpsc::Receiver<Vec<u8>>,
     ) -> Result<(), ClientError> {
@@ -328,7 +328,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cpal_audio_handler() {
-        let mut audio_handler = CpalAudioHandler::<OpusAudioCodec>::new().unwrap();
+        let audio_handler = CpalAudioHandler::<OpusAudioCodec>::new().unwrap();
 
         let (tx, rx) = mpsc::channel(1000);
         let (tx_2, mut rx_2) = mpsc::channel(1000);
