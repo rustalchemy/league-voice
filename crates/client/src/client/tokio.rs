@@ -5,11 +5,12 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
     select,
+    sync::Mutex,
 };
 
-pub(crate) struct TokioClient<A: AudioHandler> {
+pub struct TokioClient<A: AudioHandler> {
     stream: TcpStream,
-    audio_handler: Arc<A>,
+    audio_handler: Arc<Mutex<A>>,
 }
 
 impl<A: AudioHandler + 'static> Client<A> for TokioClient<A> {
@@ -17,7 +18,7 @@ impl<A: AudioHandler + 'static> Client<A> for TokioClient<A> {
         let stream = TcpStream::connect(Cow::into_owned(addr.clone())).await?;
         Ok(Self {
             stream,
-            audio_handler: Arc::new(audio_handler),
+            audio_handler: Arc::new(Mutex::new(audio_handler)),
         })
     }
 
@@ -59,7 +60,9 @@ impl<A: AudioHandler + 'static> Client<A> for TokioClient<A> {
 
         let audio_handler = self.audio_handler.clone();
         let microphone_handle =
-            tokio::spawn(async move { audio_handler.start(write_tx, output_rx).await });
+            tokio::spawn(
+                async move { audio_handler.lock().await.start(write_tx, output_rx).await },
+            );
 
         select! {
             Ok(read_result) = read_handle => {

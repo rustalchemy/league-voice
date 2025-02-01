@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Label } from "../ui/label";
 
 function AudioDeviceSelector() {
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -24,22 +25,21 @@ function AudioDeviceSelector() {
     async function handleOutputSelect(deviceId: string) {
         setOutputDevice(deviceId);
         try {
-            await invoke("set_audio_output_device", { deviceId });
+            await invoke("", { deviceId });
         } catch (err) {
             console.error("Failed to set output device:", err);
         }
     }
 
     return (
-        <div className="p-4 flex flex-col gap-1">
+        <div className="p-4 flex flex-col gap-2">
             <h2 className="text-lg font-bold mb-2">Audio Device Selector</h2>
-
-            <label className="block text-sm font-medium">Microphone:</label>
+            <Label htmlFor="microphone">Microphone</Label>
             <Select onValueChange={setInputDevice}>
                 <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select Microphone" />
                 </SelectTrigger>
-                <SelectContent className="bg-foreground bg-primary">
+                <SelectContent>
                     {devices
                         .filter((d) => d.kind === "audioinput")
                         .map((device) => (
@@ -50,7 +50,7 @@ function AudioDeviceSelector() {
                 </SelectContent>
             </Select>
 
-            <label className="block text-sm font-medium mt-4">Audio Output:</label>
+            <Label htmlFor="speakers">Speakers</Label>
             <Select onValueChange={handleOutputSelect}>
                 <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select Output" />

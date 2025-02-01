@@ -2,6 +2,18 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ClientError {
+    #[error("failed to get host: {0}")]
+    HostUnavailable(#[from] cpal::HostUnavailable),
+
+    #[error("audio handler already started: {0}")]
+    AudioHandlerAlreadyStarted(String),
+
+    #[error("default stream config error: {0}")]
+    DefaultStreamConfigError(#[from] cpal::DefaultStreamConfigError),
+
+    #[error("failed to create audio stream: {0}")]
+    DevicesError(#[from] cpal::DevicesError),
+
     #[error("make sure you have at least one host available")]
     NoHost,
 

@@ -12,7 +12,6 @@ pub struct OpusAudioCodec {
 }
 
 impl AudioCodec for OpusAudioCodec {
-    #[cfg(not(tarpaulin_include))]
     fn new(sample_rate: u32, channels: usize) -> Result<Self, ClientError> {
         let channel = match channels {
             1 => opus::Channels::Mono,
