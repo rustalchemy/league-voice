@@ -1,6 +1,6 @@
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    Device, Devices, Stream, SupportedStreamConfig,
+    Device, Stream, SupportedStreamConfig,
 };
 use tokio::sync::mpsc;
 
@@ -56,6 +56,7 @@ pub fn get_host_devices(
             active: false,
             default: name == default_name,
             config,
+            device: Some(device),
         };
         devices.push(device_info);
     }
@@ -65,25 +66,19 @@ pub fn get_host_devices(
 pub fn get_device_config(
     device_name: &str,
     device_infos: &Vec<DeviceInfo>,
-    devices: &mut Devices,
-) -> Result<(Device, DeviceInfo), ClientError> {
+) -> Result<DeviceInfo, ClientError> {
     let device_info = device_infos
         .iter()
         .find(|device| device.name == device_name);
+
     let device_info = match device_info {
         Some(device) => device,
         None => {
             return Err(ClientError::NoDevice);
         }
     };
-
-    let device = match devices.find(|device| device.name().unwrap_or_default() == device_name) {
-        Some(device) => device,
-        None => {
-            return Err(ClientError::NoDevice);
-        }
-    };
-    Ok((device, device_info.clone()))
+    println!("Device name: {:?}", device_name);
+    Ok(device_info.clone())
 }
 
 pub fn setup_input_stream(
@@ -133,34 +128,35 @@ pub fn init_device_type(
     device_type: DeviceType,
     host: &cpal::Host,
 ) -> Result<Vec<DeviceInfo>, ClientError> {
-    let mut devices = host.devices()?;
     let mut devices_info = get_host_devices(&device_type, &host)?;
     let default_device = devices_info.iter().find(|device| device.default).unwrap();
 
-    let (device, device_info) =
-        get_device_config(&default_device.name, &devices_info, &mut devices)?;
+    let device_info = get_device_config(&default_device.name, &devices_info)?;
 
     println!("Starting {} stream", device_type);
-    println!("Config: {:?}", device_info);
     println!("Sample rate: {:?}", device_info.config.sample_rate().0);
     println!("Buffer size: {:?}", device_info.config.buffer_size());
     println!("Sample format: {:?}", device_info.config.sample_format());
     println!("Channels: {:?}", device_info.config.channels());
-    println!("Device name: {:?}", device.name());
     println!();
 
-    let device_name = device.name().unwrap_or_default();
+    let device_name = device_info.name.clone();
     let new_device_info = DeviceInfo {
-        name: device_name.clone(),
+        name: device_info.name,
         device_type,
         active: true,
         default: device_info.default,
         config: device_info.config,
+        device: device_info.device,
     };
 
     for device_info in devices_info.iter_mut() {
         if device_info.name == device_name {
             *device_info = new_device_info.clone();
+        }
+
+        if device_info.name != device_name {
+            device_info.active = false;
         }
     }
 

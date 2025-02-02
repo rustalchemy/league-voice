@@ -5,7 +5,7 @@ use super::{
     DeviceHandler, DeviceInfo, DeviceType,
 };
 use crate::error::ClientError;
-use cpal::{traits::HostTrait, Stream};
+use cpal::Stream;
 use tokio::sync::mpsc::Sender;
 
 #[allow(dead_code)]
@@ -19,7 +19,8 @@ unsafe impl Send for SendStream {}
 unsafe impl Sync for SendStream {}
 
 pub struct CpalDeviceHandler {
-    devices: Vec<DeviceInfo>,
+    input_devices: Vec<DeviceInfo>,
+    output_devices: Vec<DeviceInfo>,
 
     input_stream: SendStream,
     output_stream: SendStream,
@@ -28,25 +29,28 @@ pub struct CpalDeviceHandler {
 #[async_trait::async_trait]
 impl DeviceHandler for CpalDeviceHandler {
     fn new() -> Result<Self, ClientError> {
-        let host = get_host()?;
+        let host: cpal::Host = get_host()?;
 
         let input_devices = init_device_type(DeviceType::Input, &host)?;
         let output_devices = init_device_type(DeviceType::Output, &host)?;
 
-        let devices = input_devices
-            .into_iter()
-            .chain(output_devices.into_iter())
-            .collect();
-
         Ok(Self {
-            devices,
+            input_devices,
+            output_devices,
             input_stream: SendStream(None),
             output_stream: SendStream(None),
         })
     }
 
     fn get_devices(&self, device_type: DeviceType) -> Vec<DeviceInfo> {
-        self.devices
+        let devices: Vec<DeviceInfo> = self
+            .input_devices
+            .clone()
+            .into_iter()
+            .chain(self.output_devices.clone().into_iter())
+            .collect();
+
+        devices
             .iter()
             .filter(|device| device.device_type == device_type)
             .cloned()
@@ -58,26 +62,24 @@ impl DeviceHandler for CpalDeviceHandler {
         mic_tx: Sender<Vec<f32>>,
         output_rx: std::sync::mpsc::Receiver<Vec<f32>>,
     ) -> Result<(), ClientError> {
-        let input_devices = self.get_devices(DeviceType::Input);
-        let output_devices = self.get_devices(DeviceType::Output);
-
-        let input_device = input_devices
+        println!("Starting default devices");
+        let input_device = self
+            .input_devices
             .iter()
             .find(|device| device.active)
             .ok_or(ClientError::NoDevice)?;
 
-        let output_device = output_devices
+        let output_device = self
+            .output_devices
             .iter()
             .find(|device| device.active)
             .ok_or(ClientError::NoDevice)?;
 
-        let host = get_host()?;
-        let mut devices = host.devices()?;
+        let input_config = get_device_config(&input_device.name, &self.input_devices.clone())?;
+        let output_config = get_device_config(&output_device.name, &self.output_devices.clone())?;
 
-        let (input_device, input_config) =
-            get_device_config(&input_device.name, &input_devices, &mut devices)?;
-        let (output_device, output_config) =
-            get_device_config(&output_device.name, &output_devices, &mut devices)?;
+        let input_device = input_device.device.as_ref().unwrap();
+        let output_device = output_config.device.as_ref().unwrap();
 
         self.input_stream = SendStream(Some(setup_input_stream(
             &input_device,
@@ -90,30 +92,47 @@ impl DeviceHandler for CpalDeviceHandler {
             output_rx,
         )?));
 
-        self.devices = input_devices
-            .into_iter()
-            .chain(output_devices.into_iter())
-            .collect();
-
         Ok(())
     }
 
     async fn set_active_device(
         &mut self,
-        device_type: DeviceType,
+        device_type: &DeviceType,
         device_name: String,
     ) -> Result<(), ClientError> {
-        for device in self.devices.iter_mut() {
-            if device.device_type != device_type {
-                continue;
+        // set other devices to inactive
+        match device_type {
+            DeviceType::Input => {
+                self.input_devices.iter_mut().for_each(|device| {
+                    device.active = false;
+                });
             }
-            device.active = false;
-
-            if device.name != device_name {
-                continue;
+            DeviceType::Output => {
+                self.output_devices.iter_mut().for_each(|device| {
+                    device.active = false;
+                });
             }
-            device.active = true;
         }
+
+        let device = match device_type {
+            DeviceType::Input => self
+                .input_devices
+                .iter_mut()
+                .find(|device| device.name == device_name),
+            DeviceType::Output => self
+                .output_devices
+                .iter_mut()
+                .find(|device| device.name == device_name),
+        };
+
+        let device = match device {
+            Some(device) => device,
+            None => {
+                return Err(ClientError::NoDevice);
+            }
+        };
+
+        device.active = true;
 
         Ok(())
     }

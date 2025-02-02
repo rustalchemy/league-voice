@@ -97,7 +97,7 @@ function AudioDeviceSelector() {
 
     return (
         <div className="p-4 flex flex-col gap-2">
-            <h2 className="text-lg font-bold mb-2">Audio Device Selector</h2>
+            <h2 className="text-lg font-bold mb-2">Voice</h2>
             {isRunning ? <Badge variant="outline">Running</Badge> : <Badge variant="destructive">Stopped</Badge>}
 
             <Label htmlFor="microphone">Microphone</Label>
@@ -105,7 +105,7 @@ function AudioDeviceSelector() {
                 <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select Microphone" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="item-aligned" align="center">
                     {devices
                         .filter((d) => d.device_type === DeviceType.Input)
                         .map((device) => (
@@ -121,7 +121,7 @@ function AudioDeviceSelector() {
                 <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select Output" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="item-aligned" align="center">
                     {devices
                         .filter((d) => d.device_type === DeviceType.Output)
                         .map((device) => (
@@ -132,7 +132,9 @@ function AudioDeviceSelector() {
                 </SelectContent>
             </Select>
 
-            <Button onClick={isRunning ? stop : start}>Start</Button>
+            <Button onClick={isRunning ? stop : start} variant={isRunning ? "destructive" : "default"} className="w-full">
+                {isRunning ? "Stop" : "Start"}
+            </Button>
             <Button onClick={getDevices}>Refresh Devices</Button>
         </div>
     );

@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::error::ClientError;
-use ::cpal::SupportedStreamConfig;
+use ::cpal::{Device, SupportedStreamConfig};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -25,7 +25,7 @@ impl Display for DeviceType {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Clone, Serialize)]
 pub struct DeviceInfo {
     name: String,
     device_type: DeviceType,
@@ -34,6 +34,9 @@ pub struct DeviceInfo {
 
     #[serde(skip)]
     config: SupportedStreamConfig,
+
+    #[serde(skip)]
+    device: Option<Device>,
 }
 
 #[async_trait::async_trait]
@@ -64,7 +67,7 @@ pub trait DeviceHandler: Send + Sync + Sized {
 
     async fn set_active_device(
         &mut self,
-        device_type: DeviceType,
+        device_type: &DeviceType,
         device_name: String,
     ) -> Result<(), ClientError>;
 }

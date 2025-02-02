@@ -14,12 +14,14 @@
             {
                 "title": "app",
                 "width": 400,
-                "height": 400,
+                "height": 300,
                 "resizable": false,
                 "maximizable": false,
                 "closable": false,
                 "minimizable": false,
-                "titleBarStyle": "Overlay",
+                "hiddenTitle": true,
+                "decorations": false,
+                "titleBarStyle": "Transparent",
                 "theme": "Dark"
             }
         ],

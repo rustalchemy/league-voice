@@ -8,12 +8,6 @@ use client::{
 use tauri::{Manager, State};
 use tokio::sync::Mutex;
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 #[tauri::command]
 async fn start(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
     let mut state = state.inner().lock().await;
@@ -73,7 +67,7 @@ async fn set_device(
 
     let audio_handler = state.client.device_handler_mut();
     match audio_handler
-        .set_active_device(device_type, device_name)
+        .set_active_device(&device_type, device_name)
         .await
     {
         Ok(_) => {}
@@ -114,7 +108,6 @@ pub fn run() {
         })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
             get_devices,
             set_device,
             is_running,
