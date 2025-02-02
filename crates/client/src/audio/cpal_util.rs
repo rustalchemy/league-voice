@@ -1,6 +1,6 @@
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    Device, Stream, SupportedStreamConfig,
+    Device, Sample, Stream,
 };
 use tokio::sync::mpsc;
 
@@ -83,11 +83,11 @@ pub fn get_device_config(
 
 pub fn setup_input_stream(
     device: &Device,
-    config: &SupportedStreamConfig,
+    device_info: &DeviceInfo,
     mic_tx: mpsc::Sender<Vec<f32>>,
 ) -> Result<Stream, ClientError> {
     let stream = device.build_input_stream(
-        &config.config(),
+        &device_info.config.config(),
         move |data: &[f32], _: &cpal::InputCallbackInfo| {
             let _ = mic_tx.try_send(data.to_vec());
         },
@@ -100,21 +100,24 @@ pub fn setup_input_stream(
 
 pub fn setup_output_stream(
     device: &Device,
-    config: &SupportedStreamConfig,
+    device_info: &DeviceInfo,
     output_rx: std::sync::mpsc::Receiver<Vec<f32>>,
 ) -> Result<Stream, ClientError> {
+    let channels = device_info.config.channels();
     let stream = device.build_output_stream(
-        &config.config(),
+        &device_info.config.config(),
         move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
             if let Ok(decoded_data) = output_rx.try_recv() {
-                let len_to_copy = decoded_data.len().min(data.len());
-                println!("Copying {} samples", len_to_copy);
-                data[..len_to_copy].copy_from_slice(&decoded_data[..len_to_copy]);
-                if len_to_copy < data.len() {
-                    data[len_to_copy..].fill(0.0);
+                for (i, frame) in data.chunks_mut(channels.into()).enumerate() {
+                    if i >= decoded_data.len() {
+                        break;
+                    }
+
+                    let value = decoded_data[i].to_sample();
+                    for sample in frame.iter_mut() {
+                        *sample = value;
+                    }
                 }
-            } else {
-                data.fill(0.0);
             }
         },
         |err| eprintln!("Output stream error: {:?}", err),

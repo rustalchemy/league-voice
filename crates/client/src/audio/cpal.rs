@@ -22,10 +22,10 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {}
 
 #[async_trait::async_trait]
 impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
-    fn new() -> Result<Self, ClientError> {
+    fn new(sample_rate: u32, channels: usize) -> Result<Self, ClientError> {
         let (stop_tx, stop_rx) = mpsc::channel::<()>(1);
 
-        let codec = Codec::new(48000, 1)?;
+        let codec = Codec::new(sample_rate, channels)?;
         Ok(CpalAudioHandler {
             codec: Arc::new(codec),
             stop_tx,
@@ -114,7 +114,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cpal_audio_handler() {
-        let audio_handler = CpalAudioHandler::<OpusAudioCodec>::new().unwrap();
+        let audio_handler = CpalAudioHandler::<OpusAudioCodec>::new(48000, 1).unwrap();
 
         let (tx, rx) = mpsc::channel(1000);
         let (tx_2, mut rx_2) = mpsc::channel(1000);

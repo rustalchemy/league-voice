@@ -14,7 +14,7 @@
             {
                 "title": "app",
                 "width": 400,
-                "height": 300,
+                "height": 350,
                 "resizable": false,
                 "maximizable": false,
                 "closable": false,

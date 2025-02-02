@@ -39,9 +39,19 @@ pub struct DeviceInfo {
     device: Option<Device>,
 }
 
+impl DeviceInfo {
+    pub fn config(&self) -> SupportedStreamConfig {
+        self.config.clone()
+    }
+
+    pub fn device(&self) -> Option<Device> {
+        self.device.clone()
+    }
+}
+
 #[async_trait::async_trait]
 pub trait AudioHandler: Send + Sync + Sized {
-    fn new() -> Result<Self, ClientError>;
+    fn new(sample_rate: u32, channels: usize) -> Result<Self, ClientError>;
     async fn start(
         &self,
         packet_sender: Sender<Vec<u8>>,
@@ -58,6 +68,7 @@ pub trait DeviceHandler: Send + Sync + Sized {
     fn new() -> Result<Self, ClientError>;
 
     fn get_devices(&self, device_type: DeviceType) -> Vec<DeviceInfo>;
+    fn get_active_device(&self, device_type: DeviceType) -> Option<DeviceInfo>;
 
     async fn start_defaults(
         &mut self,

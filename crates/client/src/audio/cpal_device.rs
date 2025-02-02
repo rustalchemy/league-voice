@@ -57,6 +57,21 @@ impl DeviceHandler for CpalDeviceHandler {
             .collect()
     }
 
+    fn get_active_device(&self, device_type: DeviceType) -> Option<DeviceInfo> {
+        match device_type {
+            DeviceType::Input => self
+                .input_devices
+                .iter()
+                .find(|device| device.active)
+                .cloned(),
+            DeviceType::Output => self
+                .output_devices
+                .iter()
+                .find(|device| device.active)
+                .cloned(),
+        }
+    }
+
     async fn start_defaults(
         &mut self,
         mic_tx: Sender<Vec<f32>>,
@@ -83,12 +98,12 @@ impl DeviceHandler for CpalDeviceHandler {
 
         self.input_stream = SendStream(Some(setup_input_stream(
             &input_device,
-            &input_config.config,
+            &input_config,
             mic_tx,
         )?));
         self.output_stream = SendStream(Some(setup_output_stream(
             &output_device,
-            &output_config.config,
+            &output_config,
             output_rx,
         )?));
 

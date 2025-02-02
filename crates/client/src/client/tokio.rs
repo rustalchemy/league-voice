@@ -1,5 +1,5 @@
 use crate::{
-    audio::{AudioHandler, DeviceHandler},
+    audio::{AudioHandler, DeviceHandler, DeviceType},
     client::Client,
     error::ClientError,
 };
@@ -13,7 +13,7 @@ use tokio::{
 
 pub struct TokioClient<A: AudioHandler, D: DeviceHandler> {
     stream: Option<TcpStream>,
-    audio_handler: Arc<A>,
+    audio_handler: Option<Arc<A>>,
     device_handler: D,
 
     stop_tx: Option<tokio::sync::mpsc::Sender<()>>,
@@ -26,7 +26,7 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
 
         Ok(Self {
             stream: Some(stream),
-            audio_handler: Arc::new(A::new()?),
+            audio_handler: None,
             device_handler: D::new()?,
             stop_tx: None,
         })
@@ -78,7 +78,22 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
             Ok(())
         });
 
-        let audio_handler = self.audio_handler.clone();
+        let device = self.device_handler.get_active_device(DeviceType::Output);
+        if device.is_none() {
+            return Err(ClientError::NoDevice);
+        }
+        let device = device.unwrap();
+
+        let audio_handler = if self.audio_handler.is_none() {
+            let audio_handler = Arc::new(A::new(
+                device.config().sample_rate().0,
+                device.config().channels().into(),
+            )?);
+            self.audio_handler = Some(audio_handler.clone());
+            audio_handler
+        } else {
+            self.audio_handler.as_ref().unwrap().clone()
+        };
         let microphone_handle = tokio::spawn(async move {
             audio_handler
                 .start(packet_sender, packet_receiver, mic_rx, output_tx)
@@ -137,7 +152,10 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
 
         self.stop_tx = None;
 
-        self.audio_handler.stop().await?;
+        if let Some(audio_handler) = &self.audio_handler {
+            audio_handler.stop().await?;
+        }
+
         Ok(())
     }
 
