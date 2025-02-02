@@ -5,8 +5,26 @@ use client::{
     },
     client::{tokio::TokioClient, Client},
 };
-use tauri::{Manager, State};
+use tauri::{Manager, Runtime, State, Window};
 use tokio::sync::Mutex;
+
+#[derive(Debug, serde::Deserialize)]
+enum WindowState {
+    Minimize,
+    Close,
+}
+
+#[tauri::command]
+async fn manage_window<R: Runtime>(state: WindowState, window: Window<R>) {
+    match state {
+        WindowState::Minimize => {
+            window.minimize().unwrap();
+        }
+        WindowState::Close => {
+            window.destroy().unwrap();
+        }
+    }
+}
 
 #[tauri::command]
 async fn start(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
@@ -112,7 +130,8 @@ pub fn run() {
             set_device,
             is_running,
             start,
-            stop
+            stop,
+            manage_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

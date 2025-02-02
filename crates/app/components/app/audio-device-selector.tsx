@@ -4,6 +4,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Label } from "../ui/label";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { invoke_typed } from "@/lib/utils";
 
 enum DeviceType {
     Input = "Input",
@@ -15,12 +16,6 @@ interface DeviceInfo {
     device_type: DeviceType;
     active: boolean;
     default: boolean;
-}
-
-async function invoke_typed<T>(cmd: string): Promise<T> {
-    let res = await invoke<string>(cmd);
-    let data: T = JSON.parse(res);
-    return data;
 }
 
 function AudioDeviceSelector() {
@@ -97,7 +92,6 @@ function AudioDeviceSelector() {
 
     return (
         <div className="p-4 flex flex-col gap-2">
-            <h2 className="text-lg font-bold mb-2">Voice</h2>
             {isRunning ? <Badge variant="outline">Running</Badge> : <Badge variant="destructive">Stopped</Badge>}
 
             <Label htmlFor="microphone">Microphone</Label>
