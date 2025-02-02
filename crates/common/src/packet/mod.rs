@@ -19,7 +19,6 @@ pub struct Packet {
 }
 
 impl Packet {
-    #[cfg(not(tarpaulin_include))]
     pub fn new<P: PacketType>(packet_type: P) -> Result<Self, Box<bincode::ErrorKind>> {
         let data = P::encode(&packet_type)?;
         Ok(Self {

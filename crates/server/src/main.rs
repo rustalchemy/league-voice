@@ -9,7 +9,6 @@ mod packets;
 pub mod server;
 
 #[tokio::main]
-#[cfg(not(tarpaulin_include))]
 async fn main() -> Result<(), ServerError> {
     let addr = std::env::args()
         .nth(1)

@@ -44,21 +44,18 @@ pub fn get_host_devices(
 
     let mut devices = Vec::new();
     for device in host_devices {
-        let config = match device_type {
-            DeviceType::Input => device.default_input_config()?,
-            DeviceType::Output => device.default_output_config()?,
-        };
-
         let name = device.name().unwrap_or_default();
-        let device_info = DeviceInfo {
+        devices.push(DeviceInfo {
             name: name.clone(),
             device_type: device_type.clone(),
             active: false,
             default: name == default_name,
-            config,
+            config: match device_type {
+                DeviceType::Input => device.default_input_config()?,
+                DeviceType::Output => device.default_output_config()?,
+            },
             device: Some(device),
-        };
-        devices.push(device_info);
+        });
     }
     Ok(devices)
 }
@@ -67,18 +64,13 @@ pub fn get_device_config(
     device_name: &str,
     device_infos: &Vec<DeviceInfo>,
 ) -> Result<DeviceInfo, ClientError> {
-    let device_info = device_infos
+    match device_infos
         .iter()
-        .find(|device| device.name == device_name);
-
-    let device_info = match device_info {
-        Some(device) => device,
-        None => {
-            return Err(ClientError::NoDevice);
-        }
-    };
-    println!("Device name: {:?}", device_name);
-    Ok(device_info.clone())
+        .find(|device| device.name == device_name)
+    {
+        Some(device) => Ok(device.clone()),
+        None => Err(ClientError::NoDevice),
+    }
 }
 
 pub fn setup_input_stream(
@@ -156,9 +148,7 @@ pub fn init_device_type(
     for device_info in devices_info.iter_mut() {
         if device_info.name == device_name {
             *device_info = new_device_info.clone();
-        }
-
-        if device_info.name != device_name {
+        } else {
             device_info.active = false;
         }
     }

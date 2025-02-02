@@ -48,7 +48,6 @@ impl TokioServer {
                     return Err(ServerError::ConnectionClosedByPeer);
                 }
 
-                // println!("Bytes read: {}", bytes_read);
                 buffer.extend_from_slice(&temp_buffer[..bytes_read]);
 
                 while let Ok(packet) = Packet::decode(&mut buffer) {
@@ -132,7 +131,6 @@ impl Server for TokioServer {
         }
     }
 
-    #[cfg(not(tarpaulin_include))]
     async fn process_packet(
         client_id: Uuid,
         handlers: Arc<Self::Handlers>,
