@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::error::ClientError;
 use ::cpal::SupportedStreamConfig;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 pub mod codec;
@@ -10,7 +10,7 @@ pub mod cpal;
 pub mod cpal_device;
 pub mod cpal_util;
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum DeviceType {
     Input,
     Output,
@@ -64,8 +64,7 @@ pub trait DeviceHandler: Send + Sync + Sized {
 
     async fn set_active_device(
         &mut self,
+        device_type: DeviceType,
         device_name: String,
-        mic_tx: Sender<Vec<f32>>,
-        output_rx: std::sync::mpsc::Receiver<Vec<f32>>,
     ) -> Result<(), ClientError>;
 }

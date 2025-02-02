@@ -1,7 +1,6 @@
 use super::{
     cpal_util::{
-        get_device_config, get_host, get_host_devices, init_device_type, setup_input_stream,
-        setup_output_stream,
+        get_device_config, get_host, init_device_type, setup_input_stream, setup_output_stream,
     },
     DeviceHandler, DeviceInfo, DeviceType,
 };
@@ -101,42 +100,21 @@ impl DeviceHandler for CpalDeviceHandler {
 
     async fn set_active_device(
         &mut self,
+        device_type: DeviceType,
         device_name: String,
-        mic_tx: Sender<Vec<f32>>,
-        output_rx: std::sync::mpsc::Receiver<Vec<f32>>,
     ) -> Result<(), ClientError> {
-        let host = get_host()?;
-        let mut devices = host.devices()?;
-
-        let device_info = match self
-            .devices
-            .iter()
-            .find(|device| device.name == device_name)
-        {
-            Some(device) => device,
-            None => {
-                return Err(ClientError::NoDevice);
+        for device in self.devices.iter_mut() {
+            if device.device_type != device_type {
+                continue;
             }
-        };
+            device.active = false;
 
-        let devices_info = get_host_devices(&device_info.device_type, &host)?;
-        let (device, config) = get_device_config(&device_name, &devices_info, &mut devices)?;
-
-        match &device_info.device_type {
-            DeviceType::Input => {
-                self.input_stream =
-                    SendStream(Some(setup_input_stream(&device, &config.config, mic_tx)?));
+            if device.name != device_name {
+                continue;
             }
-            DeviceType::Output => {
-                self.output_stream = SendStream(Some(setup_output_stream(
-                    &device,
-                    &config.config,
-                    output_rx,
-                )?));
-            }
+            device.active = true;
         }
 
-        self.devices = devices_info;
         Ok(())
     }
 }

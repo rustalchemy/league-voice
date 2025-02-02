@@ -1,7 +1,7 @@
 use client::{
     audio::{
         codec::opus::OpusAudioCodec, cpal::CpalAudioHandler, cpal_device::CpalDeviceHandler,
-        DeviceHandler,
+        DeviceHandler, DeviceType,
     },
     client::{tokio::TokioClient, Client},
 };
@@ -15,7 +15,37 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-async fn get_devices(state: State<'_, Mutex<AppState>>) -> Result<String, ()> {
+async fn start(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+    let mut state = state.inner().lock().await;
+
+    match state.client.run().await {
+        Ok(_) => {}
+        Err(e) => return Err(e.to_string()),
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn stop(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+    let mut state = state.inner().lock().await;
+
+    match state.client.stop().await {
+        Ok(_) => {}
+        Err(e) => return Err(e.to_string()),
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn is_running(state: State<'_, Mutex<AppState>>) -> Result<bool, String> {
+    let state = state.inner().lock().await;
+    Ok(state.client.is_running().await)
+}
+
+#[tauri::command]
+async fn get_devices(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
     let state = state.inner().lock().await;
 
     let audio_handler = state.client.device_handler();
@@ -33,17 +63,23 @@ async fn get_devices(state: State<'_, Mutex<AppState>>) -> Result<String, ()> {
 }
 
 #[tauri::command]
-async fn set_device(device_name: String, state: State<'_, Mutex<AppState>>) -> Result<(), String> {
-    let state = state.inner().lock().await;
-    let audio_handler = state.client.device_handler();
+async fn set_device(
+    device_type: DeviceType,
+    device_name: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let mut state = state.inner().lock().await;
+    state.client.stop().await.unwrap();
 
-    // match audio_handler
-    //     .set_active_device(device_name, mic_tx, output_rx)
-    //     .await
-    // {
-    //     Ok(_) => Ok(()),
-    //     Err(e) => Err(e.to_string()),
-    // }
+    let audio_handler = state.client.device_handler_mut();
+    match audio_handler
+        .set_active_device(device_type, device_name)
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => return Err(e.to_string()),
+    };
+
     Ok(())
 }
 
@@ -77,7 +113,14 @@ pub fn run() {
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, get_devices, set_device])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            get_devices,
+            set_device,
+            is_running,
+            start,
+            stop
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
