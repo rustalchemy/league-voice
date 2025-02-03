@@ -173,6 +173,7 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
 
         self.stop_tx = None;
         self.audio_handler.stop().await?;
+        self.device_handler.stop().await?;
 
         Ok(())
     }

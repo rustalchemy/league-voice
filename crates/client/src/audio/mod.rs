@@ -85,4 +85,6 @@ pub trait DeviceHandler: Send + Sync + Sized {
         device_type: &DeviceType,
         device_name: String,
     ) -> Result<(), ClientError>;
+
+    async fn stop(&mut self) -> Result<(), ClientError>;
 }

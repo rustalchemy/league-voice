@@ -5,7 +5,7 @@ use super::{
     DeviceHandler, DeviceInfo, DeviceType,
 };
 use crate::error::ClientError;
-use cpal::Stream;
+use cpal::{traits::StreamTrait, Stream};
 use tokio::sync::mpsc::Sender;
 
 #[allow(dead_code)]
@@ -148,6 +148,28 @@ impl DeviceHandler for CpalDeviceHandler {
         };
 
         device.active = true;
+
+        Ok(())
+    }
+
+    async fn stop(&mut self) -> Result<(), ClientError> {
+        if let Some(input_stream) = self.input_stream.0.take() {
+            match input_stream.pause() {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("Error pausing input stream: {:?}", e);
+                }
+            };
+        }
+
+        if let Some(output_stream) = self.output_stream.0.take() {
+            match output_stream.pause() {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("Error pausing output stream: {:?}", e);
+                }
+            };
+        }
 
         Ok(())
     }
