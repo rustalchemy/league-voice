@@ -20,15 +20,11 @@ interface DeviceInfo {
 
 function AudioDeviceSelector() {
     const [devices, setDevices] = useState<Array<DeviceInfo>>(new Array<DeviceInfo>());
-    const [inputDevice, setInputDevice] = useState<string | undefined>(undefined);
-    const [outputDevice, setOutputDevice] = useState<string | undefined>(undefined);
     const [isRunning, setIsRunning] = useState<boolean>(false);
 
     async function refeshIsRunning() {
         try {
-            let res = await invoke_typed<boolean>("is_running");
-            setIsRunning(res);
-            console.log(res);
+            setIsRunning(await invoke_typed<boolean>("is_running"));
         } catch (err) {
             console.error("Error fetching devices:", err);
         }
@@ -36,15 +32,7 @@ function AudioDeviceSelector() {
 
     async function getDevices() {
         try {
-            let res = await invoke_typed<Array<DeviceInfo>>("get_devices");
-            console.log(res);
-            setDevices(res || new Array<DeviceInfo>());
-
-            let input = res.find((d) => d.device_type === DeviceType.Input && d.active);
-            setInputDevice(input?.name);
-
-            let output = res.find((d) => d.device_type === DeviceType.Output && d.active);
-            setOutputDevice(output?.name);
+            setDevices((await invoke_typed<Array<DeviceInfo>>("get_devices")) || new Array<DeviceInfo>());
         } catch (err) {
             console.error("Error fetching devices:", err);
         }
@@ -58,15 +46,15 @@ function AudioDeviceSelector() {
     }, []);
 
     async function handleOutputSelect(deviceId: string) {
-        let device = devices.find((d) => d.name === deviceId);
+        const device = devices.find((d) => d.name === deviceId);
         if (!device) {
             console.error("Device not found:", deviceId);
             return;
         }
 
         try {
-            let res = await invoke("set_device", { deviceType: device.device_type, deviceName: deviceId });
-            console.log(res);
+            await invoke("set_device", { deviceType: device.device_type, deviceName: deviceId });
+            await getDevices();
         } catch (err) {
             console.error("Failed to set output device:", err);
         }
@@ -74,8 +62,7 @@ function AudioDeviceSelector() {
 
     async function start() {
         try {
-            let res = await invoke("start");
-            console.log(res);
+            await invoke("start");
         } catch (err) {
             console.error("Failed to start:", err);
         }
@@ -83,8 +70,7 @@ function AudioDeviceSelector() {
 
     async function stop() {
         try {
-            let res = await invoke("stop");
-            console.log(res);
+            await invoke("stop");
         } catch (err) {
             console.error("Failed to stop:", err);
         }
@@ -95,7 +81,7 @@ function AudioDeviceSelector() {
             {isRunning ? <Badge variant="outline">Running</Badge> : <Badge variant="destructive">Stopped</Badge>}
 
             <Label htmlFor="microphone">Microphone</Label>
-            <Select onValueChange={handleOutputSelect} value={inputDevice}>
+            <Select onValueChange={handleOutputSelect} value={devices.find((d) => d.device_type === DeviceType.Input && d.active)?.name}>
                 <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select Microphone" />
                 </SelectTrigger>
@@ -111,7 +97,7 @@ function AudioDeviceSelector() {
             </Select>
 
             <Label htmlFor="speakers">Speakers</Label>
-            <Select onValueChange={handleOutputSelect} value={outputDevice}>
+            <Select onValueChange={handleOutputSelect} value={devices.find((d) => d.device_type === DeviceType.Output && d.active)?.name}>
                 <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select Output" />
                 </SelectTrigger>
