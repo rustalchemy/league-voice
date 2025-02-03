@@ -72,7 +72,7 @@ impl DeviceHandler for CpalDeviceHandler {
         }
     }
 
-    async fn start_defaults(
+    async fn start_actives(
         &mut self,
         mic_tx: Sender<Vec<f32>>,
         output_rx: std::sync::mpsc::Receiver<Vec<f32>>,

@@ -2,9 +2,13 @@ use std::{fmt::Display, sync::Arc};
 
 use crate::error::ClientError;
 use ::cpal::{Device, SupportedStreamConfig};
+use codec::AudioCodec;
 use common::packet::Packet;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::{
+    mpsc::{Receiver, Sender},
+    Mutex,
+};
 
 pub mod codec;
 pub mod cpal;
@@ -52,16 +56,15 @@ impl DeviceInfo {
 
 #[async_trait::async_trait]
 pub trait AudioHandler: Send + Sync + Sized {
-    fn new(sample_rate: u32, channels: usize) -> Result<Self, ClientError>;
+    type Codec: AudioCodec;
+    fn new() -> Result<Self, ClientError>;
     async fn start(
         &self,
+        mut mic_rx: Receiver<Vec<f32>>,
         packet_sender: Sender<Packet>,
-        packet_receiver: &tokio::sync::broadcast::Receiver<Packet>,
-
-        mic_rx: Receiver<Vec<f32>>,
-        output_tx: std::sync::mpsc::Sender<Vec<f32>>,
     ) -> Result<(), ClientError>;
     async fn stop(&self) -> Result<(), ClientError>;
+    fn get_codec(&self) -> Arc<Mutex<Self::Codec>>;
 }
 
 #[async_trait::async_trait]
@@ -71,7 +74,7 @@ pub trait DeviceHandler: Send + Sync + Sized {
     fn get_devices(&self, device_type: DeviceType) -> Vec<DeviceInfo>;
     fn get_active_device(&self, device_type: DeviceType) -> Option<DeviceInfo>;
 
-    async fn start_defaults(
+    async fn start_actives(
         &mut self,
         mic_tx: Sender<Vec<f32>>,
         output_rx: std::sync::mpsc::Receiver<Vec<f32>>,

@@ -56,4 +56,16 @@ pub enum ClientError {
 
     #[error("failed on tokio broadcast send Packet: {0}")]
     TokioSendErrorBroadcastPacket(#[from] tokio::sync::broadcast::error::SendError<Packet>),
+
+    #[error("invalid packet")]
+    InvalidPacket,
+
+    #[error("codec not initialized")]
+    CodecNotInitialized,
+
+    #[error("invalid frame size")]
+    InvalidFrameSize,
+
+    #[error("poisoned lock")]
+    PoisonedLock,
 }

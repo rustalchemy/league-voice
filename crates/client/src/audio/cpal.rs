@@ -1,6 +1,6 @@
 use super::{codec::AudioCodec, AudioHandler};
 use crate::error::ClientError;
-use common::packet::{packet_type::PacketType, AudioPacket, Packet};
+use common::packet::{AudioPacket, Packet};
 use std::sync::Arc;
 use std::u32;
 use tokio::{
@@ -12,7 +12,7 @@ use tokio::{
 };
 
 pub struct CpalAudioHandler<Codec: AudioCodec> {
-    codec: Arc<Codec>,
+    codec: Arc<Mutex<Codec>>,
 
     stop_tx: mpsc::Sender<()>,
     stop_rx: Arc<Mutex<mpsc::Receiver<()>>>,
@@ -22,12 +22,13 @@ impl<Codec: AudioCodec> CpalAudioHandler<Codec> {}
 
 #[async_trait::async_trait]
 impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
-    fn new(sample_rate: u32, channels: usize) -> Result<Self, ClientError> {
+    type Codec = Codec;
+
+    fn new() -> Result<Self, ClientError> {
         let (stop_tx, stop_rx) = mpsc::channel::<()>(1);
 
-        let codec = Codec::new(sample_rate, channels)?;
         Ok(CpalAudioHandler {
-            codec: Arc::new(codec),
+            codec: Arc::new(Mutex::new(Codec::new()?)),
             stop_tx,
             stop_rx: Arc::new(Mutex::new(stop_rx)),
         })
@@ -35,17 +36,15 @@ impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
 
     async fn start(
         &self,
-        packet_sender: mpsc::Sender<Packet>,
-        mut packet_receiver: tokio::sync::broadcast::Receiver<Packet>,
-
         mut mic_rx: mpsc::Receiver<Vec<f32>>,
-        audio_output_tx: std::sync::mpsc::Sender<Vec<f32>>,
+        packet_sender: mpsc::Sender<Packet>,
     ) -> Result<(), ClientError> {
         let (audio_tx, mut audio_rx) = mpsc::channel::<Vec<u8>>(20);
 
         let codec = self.codec.clone();
         let microphone_handle = tokio::spawn(async move {
             while let Some(audio_samples) = mic_rx.recv().await {
+                let codec = codec.lock().await;
                 if let Ok(encoded_data) = codec.encode(audio_samples) {
                     let _ = audio_tx.send(encoded_data).await;
                 }
@@ -57,17 +56,6 @@ impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
             while let Some(track) = audio_rx.recv().await {
                 if let Ok(packet) = Packet::new(AudioPacket { track }) {
                     let _ = packet_sender.send(packet).await;
-                }
-            }
-            Ok(())
-        });
-
-        let codec = self.codec.clone();
-        let codec_handle = tokio::spawn(async move {
-            while let Ok(packet) = packet_receiver.recv().await {
-                let audio_packet = AudioPacket::decode(&packet.data)?;
-                if let Ok(decoded_data) = codec.decode(audio_packet.track) {
-                    audio_output_tx.send(decoded_data)?;
                 }
             }
             Ok(())
@@ -88,9 +76,6 @@ impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
             Ok(result) = audio_packets_handle => {
                 result
             },
-            Ok(result) = codec_handle => {
-                result
-            },
             Ok(result) = stop_handle => {
                 result
             }
@@ -101,6 +86,10 @@ impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
         let _ = self.stop_tx.send(()).await;
 
         Ok(())
+    }
+
+    fn get_codec(&self) -> Arc<Mutex<Codec>> {
+        self.codec.clone()
     }
 }
 
@@ -113,16 +102,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_cpal_audio_handler() {
-        let audio_handler = CpalAudioHandler::<OpusAudioCodec>::new(48000, 1).unwrap();
+        let audio_handler = CpalAudioHandler::<OpusAudioCodec>::new().unwrap();
 
-        let (tx, rx) = mpsc::channel(1000);
+        let (tx, _rx) = mpsc::channel(1000);
         let (tx_2, mut rx_2) = mpsc::channel(1000);
 
         let (_mic_tx, mic_rx) = mpsc::channel(1000);
-        let (output_tx, _output_rx) = std::sync::mpsc::channel::<Vec<f32>>();
 
         let audio_handler_handle =
-            tokio::spawn(async move { audio_handler.start(tx, rx, mic_rx, output_tx).await });
+            tokio::spawn(async move { audio_handler.start(mic_rx, tx).await });
 
         let sender_handle = tokio::spawn(async move {
             let packet = Packet::new(AudioPacket {

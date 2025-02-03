@@ -1,9 +1,10 @@
 use crate::{
-    audio::{AudioHandler, DeviceHandler, DeviceType},
+    audio::{codec::AudioCodec, AudioHandler, DeviceHandler},
     client::Client,
     error::ClientError,
+    handlers::audio::AudioPacketHandler,
 };
-use common::packet::{Packet, MAX_PACKET_SIZE};
+use common::packet::{ids::PacketId, Packet, MAX_PACKET_SIZE};
 use std::{borrow::Cow, sync::Arc};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -12,13 +13,13 @@ use tokio::{
 };
 
 pub struct TokioClient<A: AudioHandler, D: DeviceHandler> {
-    audio_handler: Option<Arc<A>>,
+    audio_handler: Arc<A>,
     device_handler: D,
 
-    stop_tx: Option<tokio::sync::mpsc::Sender<()>>,
+    stop_tx: Option<tokio::sync::oneshot::Sender<()>>,
 
     packet_sender: tokio::sync::mpsc::Sender<Packet>,
-    packet_receiver: tokio::sync::mpsc::Receiver<Packet>,
+    chan_output_rx: Option<tokio::sync::mpsc::Receiver<Vec<f32>>>,
 }
 
 #[async_trait::async_trait]
@@ -27,11 +28,14 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
         let stream = TcpStream::connect(Cow::into_owned(addr.clone())).await?;
 
         let (packet_sender, mut message_receiver) = tokio::sync::mpsc::channel::<Packet>(32);
-        let (mesage_transmitter, packet_receiver) = tokio::sync::mpsc::channel::<Packet>(32);
+        let (chan_output_tx, chan_output_rx) = tokio::sync::mpsc::channel::<Vec<f32>>(32);
 
+        let audio_handler: Arc<A> = Arc::new(A::new()?);
+        let audio_handler_clone = audio_handler.clone();
         let (mut read, mut write) = stream.into_split();
 
         let read_handle = tokio::spawn(async move {
+            let audio_handler = audio_handler_clone.clone();
             let mut buffer = Vec::with_capacity(MAX_PACKET_SIZE * 2);
             loop {
                 let mut temp_buffer = [0; MAX_PACKET_SIZE];
@@ -42,7 +46,24 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
 
                 buffer.extend_from_slice(&temp_buffer[..bytes_read]);
                 while let Ok(packet) = Packet::decode(&mut buffer) {
-                    mesage_transmitter.send(packet).await?;
+                    let packet_type = match PacketId::from_u8(packet.packet_id) {
+                        Some(packet_type) => packet_type,
+                        None => return Err(ClientError::InvalidPacket),
+                    };
+
+                    match packet_type {
+                        PacketId::AudioPacket => {
+                            AudioPacketHandler::handle_packet(
+                                packet,
+                                audio_handler.get_codec(),
+                                chan_output_tx.clone(),
+                            )
+                            .await?;
+                        }
+                        _ => {
+                            println!("Unknown packet type: {:?}", packet_type);
+                        }
+                    }
                 }
 
                 if buffer.len() > MAX_PACKET_SIZE * 2 {
@@ -74,53 +95,38 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
         });
 
         Ok(Self {
-            audio_handler: None,
+            audio_handler,
             device_handler: D::new()?,
             stop_tx: None,
             packet_sender,
-            packet_receiver,
+            chan_output_rx: Some(chan_output_rx),
         })
     }
 
     async fn run(&mut self) -> Result<(), ClientError> {
-        let (stop_tx, mut stop_rx) = tokio::sync::mpsc::channel::<()>(1);
+        let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
         self.stop_tx = Some(stop_tx);
 
         let (mic_tx, mic_rx) = tokio::sync::mpsc::channel::<Vec<f32>>(20);
         let (output_tx, output_rx) = std::sync::mpsc::channel::<Vec<f32>>();
 
-        self.device_handler
-            .start_defaults(mic_tx, output_rx)
-            .await?;
+        self.device_handler.start_actives(mic_tx, output_rx).await?;
 
-        let device = self.device_handler.get_active_device(DeviceType::Output);
-        if device.is_none() {
-            return Err(ClientError::NoDevice);
+        {
+            let codec = self.audio_handler.get_codec();
+            codec.lock().await.update(48000, 1)?;
         }
-        let device = device.unwrap();
 
-        let audio_handler = if self.audio_handler.is_none() {
-            let audio_handler = Arc::new(A::new(
-                device.config().sample_rate().0,
-                device.config().channels().into(),
-            )?);
-            self.audio_handler = Some(audio_handler.clone());
-            audio_handler
-        } else {
-            self.audio_handler.as_ref().unwrap().clone()
-        };
-
+        let audio_handler = self.audio_handler.clone();
         let packet_sender = self.packet_sender.clone();
-        let packet_receiver = &self.packet_receiver;
+        let microphone_handle =
+            tokio::spawn(async move { audio_handler.start(mic_rx, packet_sender).await });
 
-        let microphone_handle = tokio::spawn(async move {
-            audio_handler
-                .start(packet_sender, packet_receiver, mic_rx, output_tx)
-                .await
-        });
-
-        let stop_handler = tokio::spawn(async move {
-            stop_rx.recv().await;
+        let mut chan_output_rx = self.chan_output_rx.take().unwrap();
+        let output_handle = tokio::spawn(async move {
+            while let Some(track) = chan_output_rx.recv().await {
+                output_tx.send(track).unwrap();
+            }
             Ok::<(), ClientError>(())
         });
 
@@ -130,9 +136,13 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
                     println!("Microphone result: {:?}", microphone_result);
                     Ok(())
                 }
-                Ok(stop_result) = stop_handler => {
+                Ok(stop_result) = stop_rx => {
                     println!("Stop result: {:?}", stop_result);
-                    stop_result
+                    Ok(())
+                }
+                Ok(output_result) = output_handle => {
+                    println!("Output result: {:?}", output_result);
+                    output_result
                 }
             }
         });
@@ -149,23 +159,20 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
     }
 
     async fn stop(&mut self) -> Result<(), ClientError> {
-        let stop_tx = match &self.stop_tx {
+        let stop_tx = match self.stop_tx.take() {
             Some(tx) => tx,
             None => return Ok(()),
         };
 
-        match stop_tx.send(()).await {
+        match stop_tx.send(()) {
             Ok(_) => {}
-            Err(e) => {
-                panic!("Failed to send stop signal: {}", e);
+            Err(_) => {
+                panic!("Failed to send stop signal");
             }
         }
 
         self.stop_tx = None;
-
-        if let Some(audio_handler) = &self.audio_handler {
-            audio_handler.stop().await?;
-        }
+        self.audio_handler.stop().await?;
 
         Ok(())
     }
