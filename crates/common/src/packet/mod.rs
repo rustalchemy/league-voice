@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 pub const MAX_PACKET_SIZE: usize = 1024;
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 pub struct Packet {
     pub length: u32,
     pub packet_id: u8,

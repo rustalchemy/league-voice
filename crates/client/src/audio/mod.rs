@@ -1,7 +1,8 @@
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
 
 use crate::error::ClientError;
 use ::cpal::{Device, SupportedStreamConfig};
+use common::packet::Packet;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -54,8 +55,8 @@ pub trait AudioHandler: Send + Sync + Sized {
     fn new(sample_rate: u32, channels: usize) -> Result<Self, ClientError>;
     async fn start(
         &self,
-        packet_sender: Sender<Vec<u8>>,
-        packet_receiver: Receiver<Vec<u8>>,
+        packet_sender: Sender<Packet>,
+        packet_receiver: &tokio::sync::broadcast::Receiver<Packet>,
 
         mic_rx: Receiver<Vec<f32>>,
         output_tx: std::sync::mpsc::Sender<Vec<f32>>,

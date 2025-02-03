@@ -35,8 +35,8 @@ impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
 
     async fn start(
         &self,
-        packet_sender: mpsc::Sender<Vec<u8>>,
-        mut packet_receiver: mpsc::Receiver<Vec<u8>>,
+        packet_sender: mpsc::Sender<Packet>,
+        mut packet_receiver: tokio::sync::broadcast::Receiver<Packet>,
 
         mut mic_rx: mpsc::Receiver<Vec<f32>>,
         audio_output_tx: std::sync::mpsc::Sender<Vec<f32>>,
@@ -56,8 +56,7 @@ impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
         let audio_packets_handle = tokio::spawn(async move {
             while let Some(track) = audio_rx.recv().await {
                 if let Ok(packet) = Packet::new(AudioPacket { track }) {
-                    let encoded_packet = packet.encode();
-                    let _ = packet_sender.send(encoded_packet).await;
+                    let _ = packet_sender.send(packet).await;
                 }
             }
             Ok(())
@@ -65,8 +64,8 @@ impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
 
         let codec = self.codec.clone();
         let codec_handle = tokio::spawn(async move {
-            while let Some(audio_samples) = packet_receiver.recv().await {
-                let audio_packet = AudioPacket::decode(&audio_samples)?;
+            while let Ok(packet) = packet_receiver.recv().await {
+                let audio_packet = AudioPacket::decode(&packet.data)?;
                 if let Ok(decoded_data) = codec.decode(audio_packet.track) {
                     audio_output_tx.send(decoded_data)?;
                 }

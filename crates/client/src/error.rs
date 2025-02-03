@@ -1,3 +1,4 @@
+use common::packet::Packet;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -49,4 +50,10 @@ pub enum ClientError {
 
     #[error("failed on tokio mpsc send u8: {0}")]
     TokioSendErrorU8(#[from] tokio::sync::mpsc::error::SendError<Vec<u8>>),
+
+    #[error("failed on tokio mpsc send Packet: {0}")]
+    TokioSendErrorPacket(#[from] tokio::sync::mpsc::error::SendError<Packet>),
+
+    #[error("failed on tokio broadcast send Packet: {0}")]
+    TokioSendErrorBroadcastPacket(#[from] tokio::sync::broadcast::error::SendError<Packet>),
 }
