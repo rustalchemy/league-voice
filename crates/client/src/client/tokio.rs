@@ -10,16 +10,17 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
     select,
+    sync::{broadcast, mpsc, oneshot},
 };
 
 pub struct TokioClient<A: AudioHandler, D: DeviceHandler> {
     audio_handler: Arc<A>,
     device_handler: D,
 
-    stop_tx: Option<tokio::sync::oneshot::Sender<()>>,
+    stop_tx: Option<oneshot::Sender<()>>,
 
-    packet_sender: tokio::sync::mpsc::Sender<Packet>,
-    chan_output_rx: Option<tokio::sync::mpsc::Receiver<Vec<f32>>>,
+    packet_sender: mpsc::Sender<Packet>,
+    chan_output_rx: Arc<broadcast::Receiver<Vec<f32>>>,
 }
 
 #[async_trait::async_trait]
@@ -27,8 +28,8 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
     async fn connect(addr: Cow<'_, str>) -> Result<Self, ClientError> {
         let stream = TcpStream::connect(Cow::into_owned(addr.clone())).await?;
 
-        let (packet_sender, mut message_receiver) = tokio::sync::mpsc::channel::<Packet>(32);
-        let (chan_output_tx, chan_output_rx) = tokio::sync::mpsc::channel::<Vec<f32>>(32);
+        let (packet_sender, mut message_receiver) = mpsc::channel::<Packet>(32);
+        let (chan_output_tx, chan_output_rx) = broadcast::channel::<Vec<f32>>(32);
 
         let audio_handler: Arc<A> = Arc::new(A::new()?);
         let audio_handler_clone = audio_handler.clone();
@@ -99,15 +100,15 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
             device_handler: D::new()?,
             stop_tx: None,
             packet_sender,
-            chan_output_rx: Some(chan_output_rx),
+            chan_output_rx: Arc::new(chan_output_rx),
         })
     }
 
     async fn run(&mut self) -> Result<(), ClientError> {
-        let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+        let (stop_tx, stop_rx) = oneshot::channel::<()>();
         self.stop_tx = Some(stop_tx);
 
-        let (mic_tx, mic_rx) = tokio::sync::mpsc::channel::<Vec<f32>>(20);
+        let (mic_tx, mic_rx) = mpsc::channel::<Vec<f32>>(20);
         let (output_tx, output_rx) = std::sync::mpsc::channel::<Vec<f32>>();
 
         self.device_handler.start_actives(mic_tx, output_rx).await?;
@@ -122,10 +123,12 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
         let microphone_handle =
             tokio::spawn(async move { audio_handler.start(mic_rx, packet_sender).await });
 
-        let mut chan_output_rx = self.chan_output_rx.take().unwrap();
+        let chan_output_rx = self.chan_output_rx.clone();
         let output_handle = tokio::spawn(async move {
-            while let Some(track) = chan_output_rx.recv().await {
-                output_tx.send(track).unwrap();
+            while let Ok(track) = chan_output_rx.resubscribe().recv().await {
+                if let Err(_) = output_tx.send(track) {
+                    break;
+                }
             }
             Ok::<(), ClientError>(())
         });

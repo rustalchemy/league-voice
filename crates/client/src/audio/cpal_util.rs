@@ -78,6 +78,12 @@ pub fn setup_input_stream(
     device_info: &DeviceInfo,
     mic_tx: mpsc::Sender<Vec<f32>>,
 ) -> Result<Stream, ClientError> {
+    println!("Starting INPUT stream");
+    println!("Sample rate: {:?}", device_info.config.sample_rate().0);
+    println!("Buffer size: {:?}", device_info.config.buffer_size());
+    println!("Sample format: {:?}", device_info.config.sample_format());
+    println!("Channels: {:?}", device_info.config.channels());
+    println!();
     let stream = device.build_input_stream(
         &device_info.config.config(),
         move |data: &[f32], _: &cpal::InputCallbackInfo| {
@@ -95,6 +101,12 @@ pub fn setup_output_stream(
     device_info: &DeviceInfo,
     output_rx: std::sync::mpsc::Receiver<Vec<f32>>,
 ) -> Result<Stream, ClientError> {
+    println!("Starting OUTPUT stream");
+    println!("Sample rate: {:?}", device_info.config.sample_rate().0);
+    println!("Buffer size: {:?}", device_info.config.buffer_size());
+    println!("Sample format: {:?}", device_info.config.sample_format());
+    println!("Channels: {:?}", device_info.config.channels());
+    println!();
     let channels = device_info.config.channels();
     let stream = device.build_output_stream(
         &device_info.config.config(),
@@ -127,13 +139,6 @@ pub fn init_device_type(
     let default_device = devices_info.iter().find(|device| device.default).unwrap();
 
     let device_info = get_device_config(&default_device.name, &devices_info)?;
-
-    println!("Starting {} stream", device_type);
-    println!("Sample rate: {:?}", device_info.config.sample_rate().0);
-    println!("Buffer size: {:?}", device_info.config.buffer_size());
-    println!("Sample format: {:?}", device_info.config.sample_format());
-    println!("Channels: {:?}", device_info.config.channels());
-    println!();
 
     let device_name = device_info.name.clone();
     let new_device_info = DeviceInfo {

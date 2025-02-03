@@ -11,13 +11,13 @@ impl AudioPacketHandler {
     pub async fn handle_packet<A: AudioCodec>(
         packet: Packet,
         codec: Arc<Mutex<A>>,
-        audio_output_tx: tokio::sync::mpsc::Sender<Vec<f32>>,
+        audio_output_tx: tokio::sync::broadcast::Sender<Vec<f32>>,
     ) -> Result<(), ClientError> {
         let audio_packet = AudioPacket::decode(&packet.data)?;
 
         let codec = codec.lock().await;
         if let Ok(decoded_data) = codec.decode(audio_packet.track) {
-            match audio_output_tx.send(decoded_data).await {
+            match audio_output_tx.send(decoded_data) {
                 Ok(_) => {}
                 Err(_) => {
                     return Err(ClientError::InvalidPacket);
