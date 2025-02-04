@@ -7,35 +7,17 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'client'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=client",
-                    "--package=client"
-                ],
-                "filter": {
-                    "name": "client",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in executable 'client'",
+            "name": "Debug unit tests in library 'client'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=client",
+                    "--lib",
                     "--package=client"
                 ],
                 "filter": {
                     "name": "client",
-                    "kind": "bin"
+                    "kind": "lib"
                 }
             },
             "args": [],
@@ -91,6 +73,76 @@
                 ],
                 "filter": {
                     "name": "server",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'app_lib'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=app"
+                ],
+                "filter": {
+                    "name": "app_lib",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'app'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=app",
+                    "--package=app"
+                ],
+                "filter": {
+                    "name": "app",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'tauri'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--manifest-path=./crates/app/src-tauri/Cargo.toml",
+                    "--no-default-features"
+                ],
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'app'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=app",
+                    "--package=app"
+                ],
+                "filter": {
+                    "name": "app",
                     "kind": "bin"
                 }
             },

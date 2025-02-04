@@ -63,6 +63,12 @@ pub enum ClientError {
     #[error("codec not initialized")]
     CodecNotInitialized,
 
+    #[error("failed to resample: {0}")]
+    ResampleError(#[from] rubato::ResampleError),
+
+    #[error("failed to create resampler: {0}")]
+    ResamplerConstructionError(#[from] rubato::ResamplerConstructionError),
+
     #[error("invalid frame size")]
     InvalidFrameSize,
 

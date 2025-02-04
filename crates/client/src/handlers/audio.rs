@@ -15,7 +15,7 @@ impl AudioPacketHandler {
     ) -> Result<(), ClientError> {
         let audio_packet = AudioPacket::decode(&packet.data)?;
 
-        let codec = codec.lock().await;
+        let mut codec = codec.lock().await;
         if let Ok(decoded_data) = codec.decode(audio_packet.track) {
             match audio_output_tx.send(decoded_data) {
                 Ok(_) => {}

@@ -1,5 +1,5 @@
 use crate::{
-    audio::{codec::AudioCodec, AudioHandler, DeviceHandler},
+    audio::{codec::AudioCodec, AudioHandler, DeviceHandler, DeviceType},
     client::Client,
     error::ClientError,
     handlers::audio::AudioPacketHandler,
@@ -114,8 +114,15 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
         self.device_handler.start_actives(mic_tx, output_rx).await?;
 
         {
-            let codec = self.audio_handler.get_codec();
-            codec.lock().await.update(48000, 1)?;
+            let input_device = match self.device_handler.get_active_device(DeviceType::Input) {
+                Some(device) => device,
+                None => return Err(ClientError::NoDevice),
+            };
+
+            self.audio_handler.get_codec().lock().await.update(
+                input_device.config().sample_rate().0,
+                input_device.config().channels() as usize,
+            )?;
         }
 
         let audio_handler = self.audio_handler.clone();
@@ -125,7 +132,8 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
 
         let chan_output_rx = self.chan_output_rx.clone();
         let output_handle = tokio::spawn(async move {
-            while let Ok(track) = chan_output_rx.resubscribe().recv().await {
+            let mut output_rx = chan_output_rx.resubscribe();
+            while let Ok(track) = output_rx.recv().await {
                 if let Err(_) = output_tx.send(track) {
                     break;
                 }

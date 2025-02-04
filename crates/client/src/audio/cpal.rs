@@ -44,7 +44,7 @@ impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
         let codec = self.codec.clone();
         let microphone_handle = tokio::spawn(async move {
             while let Some(audio_samples) = mic_rx.recv().await {
-                let codec = codec.lock().await;
+                let mut codec = codec.lock().await;
                 if let Ok(encoded_data) = codec.encode(audio_samples) {
                     let _ = audio_tx.send(encoded_data).await;
                 }
