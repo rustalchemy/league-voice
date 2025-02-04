@@ -111,7 +111,7 @@ pub fn setup_output_stream(
     let stream = device.build_output_stream(
         &device_info.config.config(),
         move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-            if let Ok(decoded_data) = output_rx.try_recv() {
+            if let Ok(decoded_data) = output_rx.recv() {
                 for (i, frame) in data.chunks_mut(channels.into()).enumerate() {
                     if i >= decoded_data.len() {
                         break;
