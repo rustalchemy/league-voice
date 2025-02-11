@@ -43,6 +43,7 @@ impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
 
         let codec = self.codec.clone();
         let microphone_handle = tokio::spawn(async move {
+            println!("Microphone handle started");
             while let Some(audio_samples) = mic_rx.recv().await {
                 let mut codec = codec.lock().await;
                 if let Ok(encoded_data) = codec.encode(audio_samples) {
@@ -53,6 +54,7 @@ impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
         });
 
         let audio_packets_handle = tokio::spawn(async move {
+            println!("Audio packets handle started");
             while let Some(track) = audio_rx.recv().await {
                 if let Ok(packet) = Packet::new(AudioPacket { track }) {
                     let _ = packet_sender.send(packet).await;
@@ -64,6 +66,7 @@ impl<Codec: AudioCodec + 'static> AudioHandler for CpalAudioHandler<Codec> {
         let stop_rx = self.stop_rx.clone();
         let stop_handle: tokio::task::JoinHandle<Result<(), ClientError>> =
             tokio::spawn(async move {
+                println!("StopRx handle started");
                 let mut stop_rx = stop_rx.lock().await;
                 stop_rx.recv().await;
                 Ok(())

@@ -1,4 +1,4 @@
-use common::packet::Packet;
+use common::packet::{error::DecodeError, Packet};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -74,4 +74,7 @@ pub enum ClientError {
 
     #[error("poisoned lock")]
     PoisonedLock,
+
+    #[error("failed to decode: {0}")]
+    DecodeError(#[from] DecodeError),
 }

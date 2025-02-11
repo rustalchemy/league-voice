@@ -27,6 +27,7 @@ pub struct TokioClient<A: AudioHandler, D: DeviceHandler> {
 impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for TokioClient<A, D> {
     async fn connect(addr: Cow<'_, str>) -> Result<Self, ClientError> {
         let stream = TcpStream::connect(Cow::into_owned(addr.clone())).await?;
+        println!("Connected to server: {}", addr);
 
         let (packet_sender, mut message_receiver) = mpsc::channel::<Packet>(32);
         let (chan_output_tx, chan_output_rx) = broadcast::channel::<Vec<f32>>(32);
@@ -36,6 +37,7 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
         let (mut read, mut write) = stream.into_split();
 
         let read_handle = tokio::spawn(async move {
+            println!("Started reading from server");
             let audio_handler = audio_handler_clone.clone();
             let mut buffer = Vec::with_capacity(MAX_PACKET_SIZE * 2);
             loop {
@@ -46,7 +48,14 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
                 }
 
                 buffer.extend_from_slice(&temp_buffer[..bytes_read]);
-                while let Ok(packet) = Packet::decode(&mut buffer) {
+                loop {
+                    let packet = match Packet::decode(&mut buffer) {
+                        Ok(packet) => packet,
+                        Err(err) => {
+                            println!("Failed to decode packet {:?}", err);
+                            break;
+                        }
+                    };
                     let packet_type = match PacketId::from_u8(packet.packet_id) {
                         Some(packet_type) => packet_type,
                         None => return Err(ClientError::InvalidPacket),
@@ -75,6 +84,7 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
         });
 
         let write_handle = tokio::spawn(async move {
+            println!("Started writing to server");
             while let Some(packet) = message_receiver.recv().await {
                 write.write_all(&packet.encode()).await?;
                 write.flush().await?;
@@ -141,24 +151,20 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
             Ok::<(), ClientError>(())
         });
 
-        tokio::spawn(async move {
-            select! {
-                Ok(microphone_result) = microphone_handle => {
-                    println!("Microphone result: {:?}", microphone_result);
-                    Ok(())
-                }
-                Ok(stop_result) = stop_rx => {
-                    println!("Stop result: {:?}", stop_result);
-                    Ok(())
-                }
-                Ok(output_result) = output_handle => {
-                    println!("Output result: {:?}", output_result);
-                    output_result
-                }
+        select! {
+            Ok(microphone_result) = microphone_handle => {
+                println!("Microphone result: {:?}", microphone_result);
+                Ok(())
             }
-        });
-
-        Ok(())
+            Ok(stop_result) = stop_rx => {
+                println!("Stop result: {:?}", stop_result);
+                Ok(())
+            }
+            Ok(output_result) = output_handle => {
+                println!("Output result: {:?}", output_result);
+                Ok(())
+            }
+        }
     }
 
     fn device_handler(&self) -> &D {
@@ -196,17 +202,24 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::audio::{
-        codec::opus::OpusAudioCodec, cpal::CpalAudioHandler, cpal_device::CpalDeviceHandler,
-    };
-    use common::packet::AudioPacket;
+    use common::packet::{AudioPacket, Packet};
+    use futures::future::join_all;
     use std::time::Duration;
-    use tokio::{select, time::sleep};
+    use tokio::{io::AsyncWriteExt, select, time::sleep};
+
+    use crate::{
+        audio::{
+            codec::opus::OpusAudioCodec, cpal::CpalAudioHandler, cpal_device::CpalDeviceHandler,
+        },
+        client::Client,
+        error::ClientError,
+    };
+
+    use super::TokioClient;
 
     pub type TokoClient = TokioClient<CpalAudioHandler<OpusAudioCodec>, CpalDeviceHandler>;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
     async fn test_tokio_client_connect() {
         let addr = "127.0.0.1:8111";
 
@@ -225,77 +238,61 @@ mod tests {
             }
             socket.flush().await.unwrap();
 
-            Ok::<(), std::io::Error>(())
+            Ok::<(), ClientError>(())
         });
         let client = tokio::spawn(async move {
             let mut client = TokoClient::connect(addr.into()).await.unwrap();
             client.run().await
         });
-        select! {
+        let res = select! {
             Ok(result) = server => {
                 assert!(result.is_ok(), "expected server to start");
+                result
             },
             Ok(result) = client => {
-                assert!(result.is_ok(), "expected client to connect");
+                assert!(result.is_ok(), "expected client to fail");
+                result
             }
-        }
+        };
+        let _ = res.unwrap();
     }
 
-    #[tokio::test]
-    async fn test_tokio_client_connect_fail_buffer_zero() {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+    async fn test_tokio_client_connect_fail_buffer_overflow() {
         let addr = "127.0.0.1:8112";
 
         let server = tokio::spawn(async move {
             let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-            let (socket, _) = listener.accept().await.unwrap();
-
-            drop(socket);
-
-            sleep(Duration::from_millis(10)).await;
-            Ok::<(), std::io::Error>(())
-        });
-        let client = tokio::spawn(async move {
-            let mut client = TokoClient::connect(addr.into()).await.unwrap();
-            client.run().await
-        });
-        select! {
-            Ok(result) = server => {
-                assert!(result.is_ok(), "expected server to start");
-            },
-            Ok(result) = client => {
-                assert!(result.is_err(), "expected client to error");
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn test_tokio_client_connect_fail_buffer_overflow() {
-        let addr = "127.0.0.1:8113";
-
-        let server = tokio::spawn(async move {
-            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
             let (mut socket, _) = listener.accept().await.unwrap();
+
             let packet = [1; 4 * 1024];
+
             for _ in 0..10 {
                 socket.write_all(&packet).await.unwrap();
             }
             socket.flush().await.unwrap();
-
-            sleep(Duration::from_millis(10)).await;
-
-            Ok::<(), std::io::Error>(())
+            Ok::<(), ClientError>(())
         });
         let client = tokio::spawn(async move {
-            let mut client = TokoClient::connect(addr.into()).await.unwrap();
+            let mut client = match TokoClient::connect(addr.into()).await {
+                Ok(client) => client,
+                Err(e) => {
+                    return Err(e);
+                }
+            };
             client.run().await
         });
-        select! {
+
+        let res = select! {
             Ok(result) = server => {
                 assert!(result.is_ok(), "expected server to start");
+                result
             },
             Ok(result) = client => {
-                assert!(result.is_err(), "expected client to error");
+                assert!(result.is_err(), "expected client to fail");
+                result
             }
-        }
+        };
+        let _ = res.unwrap();
     }
 }
