@@ -10,21 +10,24 @@ env:
 
 jobs:
     build:
-        runs-on: ubuntu-latest
+        runs-on: windows-latest
         steps:
             - uses: actions/checkout@v4
-            - name: Set up ALSA configuration
+
+            - name: Audio device
+              run: Get-CimInstance Win32_SoundDevice | fl *
+            - name: Start audisvr
+              run: net start audiosrv
+            - name: Install Scream
+              shell: powershell
               run: |
-                  cp asoundrc ~/.asoundrc
-                  cat ~/.asoundrc  # Debug: Check the configuration
-            - name: Update apt
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y alsa-utils
-                  sudo apt-get install libasound2-dev libudev-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libwebkit2gtk-4.1-dev
-                  sudo apt-get install pulseaudio
-                  pulseaudio --start
-                  aplay -l  # List available devices
+                  Invoke-WebRequest https://github.com/duncanthrax/scream/releases/download/3.8/Scream3.8.zip -OutFile Scream3.8.zip
+                  Expand-Archive -Path Scream3.8.zip -DestinationPath Scream
+                  Import-Certificate -FilePath Scream\Install\driver\x64\Scream.cat -CertStoreLocation Cert:\LocalMachine\TrustedPublisher 
+                  Scream\Install\helpers\devcon-x64.exe install Scream\Install\driver\x64\Scream.inf *Scream
+            - name: Audio device
+              run: Get-CimInstance Win32_SoundDevice | fl *
+
             - name: Install llvm-cov
               run: cargo install cargo-llvm-cov
             - name: Build
