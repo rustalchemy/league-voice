@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 pub const MAX_PACKET_SIZE: usize = 1024;
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 pub struct Packet {
     pub length: u32,
     pub packet_id: u8,
@@ -19,7 +19,6 @@ pub struct Packet {
 }
 
 impl Packet {
-    #[cfg(not(tarpaulin_include))]
     pub fn new<P: PacketType>(packet_type: P) -> Result<Self, Box<bincode::ErrorKind>> {
         let data = P::encode(&packet_type)?;
         Ok(Self {
