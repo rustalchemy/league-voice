@@ -203,9 +203,7 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
 #[cfg(test)]
 mod tests {
     use common::packet::{AudioPacket, Packet};
-    use futures::future::join_all;
-    use std::time::Duration;
-    use tokio::{io::AsyncWriteExt, select, time::sleep};
+    use tokio::{io::AsyncWriteExt, select};
 
     use crate::{
         audio::{
@@ -220,7 +218,7 @@ mod tests {
     pub type TokoClient = TokioClient<CpalAudioHandler<OpusAudioCodec>, CpalDeviceHandler>;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
-    async fn test_tokio_client_connect() {
+    async fn test_tokio_client_connect() -> Result<(), ClientError> {
         let addr = "127.0.0.1:8111";
 
         let server = tokio::spawn(async move {
@@ -244,7 +242,7 @@ mod tests {
             let mut client = TokoClient::connect(addr.into()).await.unwrap();
             client.run().await
         });
-        let res = select! {
+        select! {
             Ok(result) = server => {
                 assert!(result.is_ok(), "expected server to start");
                 result
@@ -253,12 +251,11 @@ mod tests {
                 assert!(result.is_ok(), "expected client to fail");
                 result
             }
-        };
-        let _ = res.unwrap();
+        }
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
-    async fn test_tokio_client_connect_fail_buffer_overflow() {
+    async fn test_tokio_client_connect_fail_buffer_overflow() -> Result<(), ClientError> {
         let addr = "127.0.0.1:8112";
 
         let server = tokio::spawn(async move {
@@ -283,7 +280,7 @@ mod tests {
             client.run().await
         });
 
-        let res = select! {
+        select! {
             Ok(result) = server => {
                 assert!(result.is_ok(), "expected server to start");
                 result
@@ -292,7 +289,6 @@ mod tests {
                 assert!(result.is_err(), "expected client to fail");
                 result
             }
-        };
-        let _ = res.unwrap();
+        }
     }
 }
