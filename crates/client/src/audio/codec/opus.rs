@@ -6,6 +6,7 @@ use std::sync::Mutex;
 
 const SAMPLE_RATE: u32 = 48000;
 const CHANNELS: usize = 1;
+const CHANNEL: opus::Channels = opus::Channels::Mono;
 const FRAME_SIZE: usize = (SAMPLE_RATE as usize / 1000 * 20) * CHANNELS;
 
 pub struct OpusAudioCodec {
@@ -23,15 +24,9 @@ pub struct OpusAudioCodec {
 
 impl AudioCodec for OpusAudioCodec {
     fn new() -> Result<Self, ClientError> {
-        let channel = match CHANNELS {
-            1 => opus::Channels::Mono,
-            2 => opus::Channels::Stereo,
-            _ => return Err(ClientError::InvalidChannelCount),
-        };
-
         Ok(OpusAudioCodec {
-            encoder: Mutex::new(Encoder::new(SAMPLE_RATE, channel, Application::Audio)?),
-            decoder: Mutex::new(Decoder::new(SAMPLE_RATE, channel)?),
+            encoder: Mutex::new(Encoder::new(SAMPLE_RATE, CHANNEL, Application::Audio)?),
+            decoder: Mutex::new(Decoder::new(SAMPLE_RATE, CHANNEL)?),
 
             resampler: Mutex::new(None),
 
