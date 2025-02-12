@@ -61,7 +61,12 @@ impl AudioCodec for OpusAudioCodec {
     fn encode(&mut self, data: Vec<f32>) -> Result<Vec<u8>, ClientError> {
         for (frame_idx, frame) in data.chunks(self.channels).enumerate() {
             for (channel_idx, &sample) in frame.iter().enumerate() {
-                self.transform_buffer[channel_idx][frame_idx] = sample;
+                match self.transform_buffer[channel_idx].get_mut(frame_idx) {
+                    None => {
+                        return Err(ClientError::BufferOverflow);
+                    }
+                    Some(smpl) => *smpl = sample,
+                }
             }
         }
 
@@ -114,8 +119,7 @@ mod tests {
         let encoded = codec.encode(data.clone()).unwrap();
         let decoded = codec.decode(encoded).unwrap();
         for (a, b) in data.iter().zip(decoded.iter()) {
-            let difference = (a - b).abs();
-            assert!(difference < 0.1e-10, "Difference: {}", difference);
+            assert!((a - b).abs() < 0.1e-10);
         }
     }
 
@@ -127,8 +131,7 @@ mod tests {
         let encoded = codec.encode(data.clone()).unwrap();
         let decoded = codec.decode(encoded).unwrap();
         for (a, b) in data.iter().zip(decoded.iter()) {
-            let difference = (a - b).abs();
-            assert!(difference < 0.1e-2, "Difference: {}", difference);
+            assert!((a - b).abs() < 0.1e-2);
         }
     }
 
@@ -146,5 +149,21 @@ mod tests {
         codec.update(48000, 1).unwrap();
         let data = vec![0; 2000];
         assert!(codec.decode(data).is_err());
+    }
+
+    #[test]
+    fn should_fail_to_encode_audio_data() {
+        let mut codec = OpusAudioCodec::new().unwrap();
+        codec.update(48000, 1).unwrap();
+        let data = vec![0.0; 2000];
+        assert!(codec.encode(data).is_err());
+    }
+
+    #[test]
+    fn should_fail_to_encode_audio_data_stereo() {
+        let mut codec = OpusAudioCodec::new().unwrap();
+        codec.update(48000, 2).unwrap();
+        let data = vec![0.0; 2000];
+        assert!(codec.encode(data).is_err());
     }
 }

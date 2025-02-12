@@ -11,9 +11,9 @@ use tokio::sync::{
 };
 
 pub mod codec;
-pub mod cpal;
 pub mod cpal_device;
 pub mod cpal_util;
+pub mod processor;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum DeviceType {
@@ -55,15 +55,11 @@ impl DeviceInfo {
 }
 
 #[async_trait::async_trait]
-pub trait AudioHandler: Send + Sync + Sized {
+pub trait SoundProcessor: Send + Sync + Sized {
     type Codec: AudioCodec;
     fn new() -> Result<Self, ClientError>;
-    async fn start(
-        &self,
-        mut mic_rx: Receiver<Vec<f32>>,
-        packet_sender: Sender<Packet>,
-    ) -> Result<(), ClientError>;
-    async fn stop(&self) -> Result<(), ClientError>;
+    async fn start(&self, mut mic_rx: Receiver<Vec<f32>>, packet_sender: Sender<Packet>);
+    async fn stop(&self);
     fn get_codec(&self) -> Arc<Mutex<Self::Codec>>;
 }
 

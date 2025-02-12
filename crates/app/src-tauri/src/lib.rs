@@ -1,6 +1,6 @@
 use client::{
     audio::{
-        codec::opus::OpusAudioCodec, cpal::CpalAudioHandler, cpal_device::CpalDeviceHandler,
+        codec::opus::OpusAudioCodec, cpal_device::CpalDeviceHandler, processor::AudioProcessor,
         DeviceHandler, DeviceType,
     },
     client::{tokio::TokioClient, Client},
@@ -96,7 +96,7 @@ async fn set_device(
 }
 
 struct AppState {
-    client: TokioClient<CpalAudioHandler<OpusAudioCodec>, CpalDeviceHandler>,
+    client: TokioClient<AudioProcessor<OpusAudioCodec>, CpalDeviceHandler>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -137,8 +137,7 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-async fn setup() -> Result<TokioClient<CpalAudioHandler<OpusAudioCodec>, CpalDeviceHandler>, String>
-{
+async fn setup() -> Result<TokioClient<AudioProcessor<OpusAudioCodec>, CpalDeviceHandler>, String> {
     let addr = std::borrow::Cow::Borrowed("127.0.0.1:8080");
     let client = match TokioClient::connect(addr).await {
         Ok(client) => client,

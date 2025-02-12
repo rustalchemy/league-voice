@@ -1,5 +1,5 @@
 use crate::{
-    audio::{codec::AudioCodec, AudioHandler, DeviceHandler, DeviceType},
+    audio::{codec::AudioCodec, DeviceHandler, DeviceType, SoundProcessor},
     client::Client,
     error::ClientError,
     handlers::audio::AudioPacketHandler,
@@ -13,7 +13,7 @@ use tokio::{
     sync::{broadcast, mpsc, oneshot},
 };
 
-pub struct TokioClient<A: AudioHandler, D: DeviceHandler> {
+pub struct TokioClient<A: SoundProcessor, D: DeviceHandler> {
     audio_handler: Arc<A>,
     device_handler: D,
 
@@ -24,7 +24,7 @@ pub struct TokioClient<A: AudioHandler, D: DeviceHandler> {
 }
 
 #[async_trait::async_trait]
-impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for TokioClient<A, D> {
+impl<A: SoundProcessor + 'static, D: DeviceHandler + 'static> Client<A, D> for TokioClient<A, D> {
     async fn connect(addr: Cow<'_, str>) -> Result<Self, ClientError> {
         let stream = TcpStream::connect(Cow::into_owned(addr.clone())).await?;
         println!("Connected to server: {}", addr);
@@ -137,8 +137,10 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
 
         let audio_handler = self.audio_handler.clone();
         let packet_sender = self.packet_sender.clone();
-        let microphone_handle =
-            tokio::spawn(async move { audio_handler.start(mic_rx, packet_sender).await });
+        let microphone_handle = tokio::spawn(async move {
+            let _ = audio_handler.start(mic_rx, packet_sender).await;
+            println!("audio stop")
+        });
 
         let chan_output_rx = self.chan_output_rx.clone();
         let output_handle = tokio::spawn(async move {
@@ -189,7 +191,7 @@ impl<A: AudioHandler + 'static, D: DeviceHandler + 'static> Client<A, D> for Tok
         }
 
         self.stop_tx = None;
-        self.audio_handler.stop().await?;
+        self.audio_handler.stop().await;
         self.device_handler.stop().await?;
 
         Ok(())
@@ -207,7 +209,7 @@ mod tests {
 
     use crate::{
         audio::{
-            codec::opus::OpusAudioCodec, cpal::CpalAudioHandler, cpal_device::CpalDeviceHandler,
+            codec::opus::OpusAudioCodec, cpal_device::CpalDeviceHandler, processor::AudioProcessor,
         },
         client::Client,
         error::ClientError,
@@ -215,7 +217,7 @@ mod tests {
 
     use super::TokioClient;
 
-    pub type TokoClient = TokioClient<CpalAudioHandler<OpusAudioCodec>, CpalDeviceHandler>;
+    pub type TokoClient = TokioClient<AudioProcessor<OpusAudioCodec>, CpalDeviceHandler>;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
     async fn test_tokio_client_connect() -> Result<(), ClientError> {

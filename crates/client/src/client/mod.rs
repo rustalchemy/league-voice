@@ -1,5 +1,5 @@
 use crate::{
-    audio::{AudioHandler, DeviceHandler},
+    audio::{DeviceHandler, SoundProcessor},
     error::ClientError,
 };
 use std::borrow::Cow;
@@ -7,7 +7,7 @@ use std::borrow::Cow;
 pub mod tokio;
 
 #[async_trait::async_trait]
-pub trait Client<A: AudioHandler, D: DeviceHandler>: Send + Sync + Sized {
+pub trait Client<S: SoundProcessor, D: DeviceHandler>: Send + Sync + Sized {
     async fn connect(addr: Cow<'_, str>) -> Result<Self, ClientError>;
     async fn run(&mut self) -> Result<(), ClientError>;
 
