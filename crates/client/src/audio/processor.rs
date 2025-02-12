@@ -68,14 +68,7 @@ impl<Codec: AudioCodec + 'static> SoundProcessor for AudioProcessor<Codec> {
             loop {
                 tokio::select! {
                     Some(track) = audio_rx.recv() => {
-                        match Packet::new(AudioPacket { track }){
-                            Ok(packet) => {
-                                let _ = packet_sender.send(packet).await;
-                            },
-                            Err(e) => {
-                                println!("Failed to create audio packet {:?}", e);
-                            }
-                        }
+                        let _ = packet_sender.send(Packet::new(AudioPacket { track })).await;
                     }
                     _ = stop_rx_clone.recv() => break
                 }

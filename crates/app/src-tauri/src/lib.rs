@@ -84,10 +84,7 @@ async fn set_device(
     state.client.stop().await.unwrap();
 
     let audio_handler = state.client.device_handler_mut();
-    match audio_handler
-        .set_active_device(&device_type, device_name)
-        .await
-    {
+    match audio_handler.set_active_device(&device_type, device_name) {
         Ok(_) => {}
         Err(e) => return Err(e.to_string()),
     };

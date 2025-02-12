@@ -2,11 +2,11 @@ use super::ids::PacketId;
 use serde::{de::DeserializeOwned, Serialize};
 
 pub trait PacketType: DeserializeOwned + Serialize {
-    fn encode(&self) -> Result<Vec<u8>, Box<bincode::ErrorKind>> {
-        bincode::serialize(self)
+    fn encode(&self) -> Vec<u8> {
+        bincode::serialize(self).unwrap()
     }
 
-    fn decode(data: &[u8]) -> Result<Self, Box<bincode::ErrorKind>> {
+    fn decode(data: &[u8]) -> Result<Self, bincode::Error> {
         bincode::deserialize(data)
     }
 
@@ -21,7 +21,7 @@ mod tests {
     #[test]
     fn should_encode_and_decode_packet_type() {
         let packet_type = ConnectPacket;
-        let deserialized = PacketType::decode(&PacketType::encode(&packet_type).unwrap()).unwrap();
+        let deserialized = PacketType::decode(&PacketType::encode(&packet_type)).unwrap();
         assert_eq!(packet_type, deserialized);
     }
 }

@@ -19,13 +19,13 @@ pub struct Packet {
 }
 
 impl Packet {
-    pub fn new<P: PacketType>(packet_type: P) -> Result<Self, Box<bincode::ErrorKind>> {
-        let data = P::encode(&packet_type)?;
-        Ok(Self {
+    pub fn new<P: PacketType>(packet_type: P) -> Self {
+        let data = P::encode(&packet_type);
+        Self {
             length: data.len() as u32,
             packet_id: P::packet_id().to_u8(),
             data,
-        })
+        }
     }
 
     pub fn encode(&self) -> Vec<u8> {
@@ -70,17 +70,17 @@ mod tests {
 
     #[test]
     fn should_create_new_packet() {
-        let packet = Packet::new(ConnectPacket).unwrap();
+        let packet = Packet::new(ConnectPacket);
         assert_eq!(packet.length, 0);
         assert_eq!(packet.packet_id, 0);
         assert_eq!(packet.data, vec![]);
 
-        let packet = Packet::new(DisconnectPacket).unwrap();
+        let packet = Packet::new(DisconnectPacket);
         assert_eq!(packet.length, 0);
         assert_eq!(packet.packet_id, 1);
         assert_eq!(packet.data, vec![]);
 
-        let packet = Packet::new(AudioPacket { track: vec![1] }).unwrap();
+        let packet = Packet::new(AudioPacket { track: vec![1] });
         assert_eq!(packet.length, 9);
         assert_eq!(packet.packet_id, 2);
         assert_eq!(packet.data, vec![1, 0, 0, 0, 0, 0, 0, 0, 1]);
@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn should_encode_and_encode_packet() {
-        let packet = Packet::new(ConnectPacket).unwrap();
+        let packet = Packet::new(ConnectPacket);
         assert_eq!(packet, Packet::decode(&mut packet.encode()).unwrap());
     }
 
@@ -104,7 +104,7 @@ mod tests {
 
     #[test]
     fn test_packet_to_vec() {
-        let packet = Packet::new(ConnectPacket).unwrap();
+        let packet = Packet::new(ConnectPacket);
         assert_eq!(packet.encode(), Vec::from(packet));
     }
 }

@@ -121,7 +121,7 @@ impl<A: SoundProcessor + 'static, D: DeviceHandler + 'static> Client<A, D> for T
         let (mic_tx, mic_rx) = mpsc::channel::<Vec<f32>>(20);
         let (output_tx, output_rx) = std::sync::mpsc::channel::<Vec<f32>>();
 
-        self.device_handler.start_actives(mic_tx, output_rx).await?;
+        self.device_handler.start_actives(mic_tx, output_rx)?;
 
         {
             let input_device = match self.device_handler.get_active_device(DeviceType::Input) {
@@ -192,7 +192,7 @@ impl<A: SoundProcessor + 'static, D: DeviceHandler + 'static> Client<A, D> for T
 
         self.stop_tx = None;
         self.audio_handler.stop().await;
-        self.device_handler.stop().await?;
+        self.device_handler.stop()?;
 
         Ok(())
     }
@@ -204,6 +204,8 @@ impl<A: SoundProcessor + 'static, D: DeviceHandler + 'static> Client<A, D> for T
 
 #[cfg(test)]
 mod tests {
+    use std::thread::sleep;
+
     use common::packet::{AudioPacket, Packet};
     use tokio::{io::AsyncWriteExt, select};
 
@@ -230,7 +232,6 @@ mod tests {
             let packet = Packet::new(AudioPacket {
                 track: vec![0; 960],
             })
-            .unwrap()
             .encode();
 
             for _ in 0..10 {
@@ -257,10 +258,10 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
-    async fn test_tokio_client_connect_fail_buffer_overflow() -> Result<(), ClientError> {
+    async fn test_tokio_client_connect_fail_buffer_overflow() {
         let addr = "127.0.0.1:8112";
 
-        let server = tokio::spawn(async move {
+        tokio::spawn(async move {
             let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
             let (mut socket, _) = listener.accept().await.unwrap();
 
@@ -270,27 +271,12 @@ mod tests {
                 socket.write_all(&packet).await.unwrap();
             }
             socket.flush().await.unwrap();
+
+            sleep(std::time::Duration::from_millis(100));
             Ok::<(), ClientError>(())
         });
-        let client = tokio::spawn(async move {
-            let mut client = match TokoClient::connect(addr.into()).await {
-                Ok(client) => client,
-                Err(e) => {
-                    return Err(e);
-                }
-            };
-            client.run().await
-        });
 
-        select! {
-            Ok(result) = server => {
-                assert!(result.is_ok(), "expected server to start");
-                result
-            },
-            Ok(result) = client => {
-                assert!(result.is_err(), "expected client to fail");
-                result
-            }
-        }
+        let mut client = TokoClient::connect(addr.into()).await.unwrap();
+        assert!(client.run().await.is_err(), "expected client to fail");
     }
 }
