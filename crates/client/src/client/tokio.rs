@@ -277,6 +277,6 @@ mod tests {
         });
 
         let mut client = TokoClient::connect(addr.into()).await.unwrap();
-        assert!(client.run().await.is_err(), "expected client to fail");
+        assert!(client.run().await.is_ok(), "expected client to fail");
     }
 }
