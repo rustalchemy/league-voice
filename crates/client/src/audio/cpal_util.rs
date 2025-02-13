@@ -41,10 +41,13 @@ pub fn get_host_devices(
         }
     };
     let default_name = default_device.name().unwrap_or_default();
+    println!("Default device: {:?}", default_name);
+    println!("Devices:");
 
     let mut devices = Vec::new();
     for device in host_devices {
         let name = device.name().unwrap_or_default();
+        println!("{:?}", name);
         devices.push(DeviceInfo {
             name: name.clone(),
             device_type: device_type.clone(),
@@ -182,9 +185,9 @@ mod tests {
         assert!(!get_host_devices(&DeviceType::Input, &host)
             .unwrap()
             .is_empty());
-        // assert!(!get_host_devices(&DeviceType::Output, &host)
-        //     .unwrap()
-        //     .is_empty());
+        assert!(!get_host_devices(&DeviceType::Output, &host)
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
