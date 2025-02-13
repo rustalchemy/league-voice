@@ -62,14 +62,15 @@ jobs:
             - name: Install llvm-cov
               run: cargo install cargo-llvm-cov
             - name: Generate coverage report
-              run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info --exclude app --verbose
+              run: cargo llvm-cov --all-features --workspace --cobertura --output-path cobertura.xml --exclude app --verbose
             - name: Coveralls
               uses: coverallsapp/github-action@v2
               with:
-                  file: lcov.info
+                  file: cobertura.xml
+
             - name: Codecov
               uses: codecov/codecov-action@v2
               with:
-                  file: lcov.info
+                  file: cobertura.xml
                   token: ${{ secrets.CODECOV_TOKEN }}
                   slug: fanegui/league-voice
