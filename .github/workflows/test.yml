@@ -33,7 +33,7 @@ jobs:
                   sudo usermod -a -G audio ${USER}
                   sleep 5
                   echo "Starting Jack..."
-                  sudo -E su ${USER} -c "jackd -r -ddummy -r44100 -p1024" &
+                  sudo -E su ${USER} -c "jackd -r -ddummy -r48000 -p960" &
                   echo "Waiting for Jack..."
                   sleep 5
               shell: bash
