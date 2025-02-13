@@ -40,7 +40,7 @@ jobs:
             - name: Install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov
             - name: Install nextest
-              run: cargo install nextest
+              run: cargo install --locked cargo-nextest
             - name: Generate coverage report
               run: |
                   cargo llvm-cov nextest --all-features --workspace --exclude app 
