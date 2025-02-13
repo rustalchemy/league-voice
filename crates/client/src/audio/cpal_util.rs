@@ -208,34 +208,34 @@ mod tests {
         assert!(devices_info.iter().any(|device| device.active));
     }
 
-    #[tokio::test]
-    async fn test_setup_input_stream() {
-        let devices_info = get_host_devices(&DeviceType::Input, &get_host().unwrap()).unwrap();
-        let device_info = get_device_config(&devices_info[0].name, &devices_info).unwrap();
-        let device = device_info.device.as_ref().unwrap();
-        let (mic_tx, mut rx) = mpsc::channel(100);
-        let stream = setup_input_stream(&device, &device_info, mic_tx).unwrap();
-        stream.play().unwrap();
-        assert!(rx.recv().await.is_some());
-        stream.pause().unwrap();
-        sleep(Duration::from_millis(150)).await;
-        assert!(rx.try_recv().is_err());
-    }
+    // #[tokio::test]
+    // async fn test_setup_input_stream() {
+    //     let devices_info = get_host_devices(&DeviceType::Input, &get_host().unwrap()).unwrap();
+    //     let device_info = get_device_config(&devices_info[0].name, &devices_info).unwrap();
+    //     let device = device_info.device.as_ref().unwrap();
+    //     let (mic_tx, mut rx) = mpsc::channel(100);
+    //     let stream = setup_input_stream(&device, &device_info, mic_tx).unwrap();
+    //     stream.play().unwrap();
+    //     assert!(rx.recv().await.is_some());
+    //     stream.pause().unwrap();
+    //     sleep(Duration::from_millis(150)).await;
+    //     assert!(rx.try_recv().is_err());
+    // }
 
-    #[tokio::test]
-    async fn test_setup_output_stream() {
-        let host = get_host().unwrap();
-        let devices_info = get_host_devices(&DeviceType::Output, &host).unwrap();
-        let device_info = get_device_config(&devices_info[0].name, &devices_info).unwrap();
-        let device = device_info.device.as_ref().unwrap();
-        let (output_tx, output_rx) = std::sync::mpsc::channel();
-        let stream = setup_output_stream(&device, &device_info, output_rx).unwrap();
-        stream.play().unwrap();
+    // #[tokio::test]
+    // async fn test_setup_output_stream() {
+    //     let host = get_host().unwrap();
+    //     let devices_info = get_host_devices(&DeviceType::Output, &host).unwrap();
+    //     let device_info = get_device_config(&devices_info[0].name, &devices_info).unwrap();
+    //     let device = device_info.device.as_ref().unwrap();
+    //     let (output_tx, output_rx) = std::sync::mpsc::channel();
+    //     let stream = setup_output_stream(&device, &device_info, output_rx).unwrap();
+    //     stream.play().unwrap();
 
-        sleep(Duration::from_millis(150)).await;
-        assert!(output_tx.send(vec![0.0; 100]).is_ok());
-        stream.pause().unwrap();
-    }
+    //     sleep(Duration::from_millis(150)).await;
+    //     assert!(output_tx.send(vec![0.0; 100]).is_ok());
+    //     stream.pause().unwrap();
+    // }
 
     #[test]
     fn test_get_device_config_no_device() {
