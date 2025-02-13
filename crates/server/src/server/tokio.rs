@@ -209,7 +209,7 @@ mod tests {
         let client = tokio::spawn(async move {
             let mut client = TcpStream::connect(addr).await?;
             client
-                .write_all(Packet::new(ConnectPacket).unwrap().encode().as_slice())
+                .write_all(Packet::new(ConnectPacket).encode().as_slice())
                 .await?;
             client.flush().await
         });
@@ -241,11 +241,9 @@ mod tests {
     }
 
     async fn connect_and_send_packets(addr: &str) -> Result<(), Error> {
-        let packet = Packet::new(AudioPacket { track: vec![1] })
-            .unwrap()
-            .encode();
-        let connect = Packet::new(ConnectPacket).unwrap().encode();
-        let disconnect = Packet::new(DisconnectPacket).unwrap().encode();
+        let packet = Packet::new(AudioPacket { track: vec![1] }).encode();
+        let connect = Packet::new(ConnectPacket).encode();
+        let disconnect = Packet::new(DisconnectPacket).encode();
 
         let mut client = TcpStream::connect(addr).await?;
         client.write_all(connect.as_slice()).await?;
@@ -350,9 +348,7 @@ mod tests {
         let server = tokio::spawn(async move { start_server(addr).await });
         let client = tokio::spawn(async move {
             let mut client = TcpStream::connect(addr).await?;
-            let packet = Packet::new(AudioPacket { track: Vec::new() })
-                .unwrap()
-                .encode();
+            let packet = Packet::new(AudioPacket { track: Vec::new() }).encode();
             let mut buffer = vec![1; 1024 * 3];
             buffer.extend_from_slice(&packet);
 
@@ -381,7 +377,7 @@ mod tests {
             server.run(Cow::Borrowed(addr)).await
         });
         let client = tokio::spawn(async move {
-            let connect = Packet::new(ConnectPacket).unwrap().encode();
+            let connect = Packet::new(ConnectPacket).encode();
 
             let mut client = TcpStream::connect(addr).await?;
             client.write_all(connect.as_slice()).await?;

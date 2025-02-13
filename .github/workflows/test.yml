@@ -10,44 +10,45 @@ env:
 
 jobs:
     build:
-        runs-on: windows-latest
+        runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
 
-            - name: Install Scream
-              shell: powershell
+            - name: Set up ALSA configuration
               run: |
-                  Invoke-WebRequest https://github.com/duncanthrax/scream/releases/download/4.0/Scream4.0.zip -OutFile Scream4.0.zip
-                  Expand-Archive -Path Scream4.0.zip -DestinationPath Scream
-                  openssl req -batch -verbose -x509 -newkey rsa -keyout ScreamCertificate.pvk -out ScreamCertificate.cer -nodes -extensions v3_req
-                  openssl pkcs12 -export -nodes -in ScreamCertificate.cer -inkey ScreamCertificate.pvk -out ScreamCertificate.pfx -passout pass:
-            - name: Setup MSVC Dev Cmd
-              uses: ilammy/msvc-dev-cmd@v1
-            - name: Sign and Install Scream Driver on Windows
-              shell: powershell
+                  cp asoundrc ~/.asoundrc
+                  cat ~/.asoundrc  # Debug: Check the configuration
+
+            - name: Update apt
               run: |
-                  signtool sign /v /fd SHA256 /f ScreamCertificate.pfx Scream\Install\driver\x64\Scream.cat
-                  Import-Certificate -FilePath ScreamCertificate.cer -CertStoreLocation Cert:\LocalMachine\root
-                  Import-Certificate -FilePath ScreamCertificate.cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher
-                  Scream\Install\helpers\devcon-x64.exe install Scream\Install\driver\x64\Scream.inf *Scream
-              timeout-minutes: 5
-
-            - name: Start audisvr
-              run: net start audiosrv
-
-            - name: Install llvm-cov
-              run: cargo install cargo-llvm-cov
-            - name: Build
-              run: cargo build
+                  sudo apt-get update
+                  sudo apt-get install -y alsa-utils jackd2 libjack-jackd2-dev
+                  sudo apt-get install libasound2-dev libudev-dev 
+                  sudo apt-get install pulseaudio
+                  pulseaudio --start
+                  aplay -l  # List available devices
+            - name: Setup Jack
+              run: |
+                  echo "Setting up Jack..."
+                  sudo usermod -a -G audio ${USER}
+                  sleep 5
+                  echo "Starting Jack..."
+                  sudo -E su ${USER} -c "jackd -r -ddummy -r48000 -p480" &
+                  echo "Waiting for Jack..."
+                  sleep 5
+              shell: bash
+            - name: Install cargo-llvm-cov
+              uses: taiki-e/install-action@cargo-llvm-cov
+            - name: Install nextest
+              run: cargo install --locked cargo-nextest
             - name: Generate coverage report
-              run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info --exclude app
-            - name: Coveralls
-              uses: coverallsapp/github-action@v2
-              with:
-                  file: lcov.info
+              run: |
+                  cargo llvm-cov nextest --all-features --workspace --exclude app 
+                  cargo llvm-cov report --codecov --output-path target/nextest/default/codecov.json
             - name: Codecov
               uses: codecov/codecov-action@v2
               with:
-                  file: lcov.info
+                  file: ./codecov.json,./junit.xml
                   token: ${{ secrets.CODECOV_TOKEN }}
                   slug: fanegui/league-voice
+                  directory: target/nextest/default

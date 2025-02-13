@@ -32,7 +32,7 @@ mod tests {
                 .process(PacketData::new(
                     Default::default(),
                     PacketId::ConnectPacket,
-                    ConnectPacket::default().encode().unwrap()
+                    ConnectPacket::default().encode()
                 ))
                 .await
                 .is_ok(),
@@ -47,7 +47,7 @@ mod tests {
                 .process(PacketData::new(
                     Default::default(),
                     PacketId::AudioPacket,
-                    ConnectPacket::default().encode().unwrap()
+                    ConnectPacket::default().encode()
                 ))
                 .await
                 .is_err(),

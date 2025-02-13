@@ -1,5 +1,6 @@
 # League-Voice
-[![Coverage Status](https://coveralls.io/repos/github/rustalchemy/league-voice/badge.svg)](https://coveralls.io/github/rustalchemy/league-voice)
+
+[![codecov](https://codecov.io/github/fanegui/league-voice/graph/badge.svg?token=GNNG98W2VV)](https://codecov.io/github/fanegui/league-voice)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
 This is a hobby project in which I will try to achieve in game communication (voice chat) for League of Legends.
