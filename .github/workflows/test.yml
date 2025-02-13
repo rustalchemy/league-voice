@@ -22,7 +22,7 @@ jobs:
             - name: Update apt
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y alsa-utils jackd2 libjack-jackd2-dev
+                  sudo apt-get install -y alsa-utils jackd2 libjack-jackd2-dev libglib2.0-dev gobject-2.0-dev
                   sudo apt-get install libasound2-dev libudev-dev 
                   sudo apt-get install pulseaudio
                   pulseaudio --start
@@ -60,7 +60,7 @@ jobs:
             #   run: net start audiosrv
 
             - name: Install cargo-llvm-cov
-              run: cargo install cargo-llvm-cov
+              uses: taiki-e/install-action@cargo-llvm-cov
             - name: Generate coverage report
               run: cargo llvm-cov --all-features --workspace --codecov --output-path codecov.json
             - name: Codecov
