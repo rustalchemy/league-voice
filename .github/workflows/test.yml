@@ -36,6 +36,7 @@ jobs:
                   sudo -E su ${USER} -c "jackd -r -ddummy -r44100 -p1024" &
                   echo "Waiting for Jack..."
                   sleep 5
+              shell: bash
 
             # - name: Install Scream
             #   shell: powershell
