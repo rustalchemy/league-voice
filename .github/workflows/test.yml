@@ -22,7 +22,7 @@ jobs:
             - name: Update apt
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y alsa-utils jackd2 libjack-jackd2-dev libglib2.0-dev gobject-2.0-dev
+                  sudo apt-get install -y alsa-utils jackd2 libjack-jackd2-dev
                   sudo apt-get install libasound2-dev libudev-dev 
                   sudo apt-get install pulseaudio
                   pulseaudio --start
@@ -37,32 +37,10 @@ jobs:
                   echo "Waiting for Jack..."
                   sleep 5
               shell: bash
-
-            # - name: Install Scream
-            #   shell: powershell
-            #   run: |
-            #       Invoke-WebRequest https://github.com/duncanthrax/scream/releases/download/4.0/Scream4.0.zip -OutFile Scream4.0.zip
-            #       Expand-Archive -Path Scream4.0.zip -DestinationPath Scream
-            #       openssl req -batch -verbose -x509 -newkey rsa -keyout ScreamCertificate.pvk -out ScreamCertificate.cer -nodes -extensions v3_req
-            #       openssl pkcs12 -export -nodes -in ScreamCertificate.cer -inkey ScreamCertificate.pvk -out ScreamCertificate.pfx -passout pass:
-            # - name: Setup MSVC Dev Cmd
-            #   uses: ilammy/msvc-dev-cmd@v1
-            # - name: Sign and Install Scream Driver on Windows
-            #   shell: powershell
-            #   run: |
-            #       signtool sign /v /fd SHA256 /f ScreamCertificate.pfx Scream\Install\driver\x64\Scream.cat
-            #       Import-Certificate -FilePath ScreamCertificate.cer -CertStoreLocation Cert:\LocalMachine\root
-            #       Import-Certificate -FilePath ScreamCertificate.cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher
-            #       Scream\Install\helpers\devcon-x64.exe install Scream\Install\driver\x64\Scream.inf *Scream
-            #   timeout-minutes: 5
-
-            # - name: Start audisvr
-            #   run: net start audiosrv
-
             - name: Install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov
             - name: Generate coverage report
-              run: cargo llvm-cov --all-features --workspace --codecov --output-path codecov.json
+              run: cargo llvm-cov --all-features --workspace --codecov --output-path codecov.json --exclude app --verbose
             - name: Codecov
               uses: codecov/codecov-action@v2
               with:
