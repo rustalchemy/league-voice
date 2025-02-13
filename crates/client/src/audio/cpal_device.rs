@@ -175,7 +175,7 @@ impl DeviceHandler for CpalDeviceHandler {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{sync::Arc, thread::sleep, time::Duration};
 
     use super::*;
     use crate::audio::cpal_util::get_host_devices;
@@ -265,10 +265,17 @@ mod tests {
 
         let (mic_tx, _) = mpsc::channel(10);
         let (_, output_rx) = std::sync::mpsc::channel();
+        let handler = Arc::new(Mutex::new(handler));
+        let handler_cloned = handler.clone();
+        tokio::spawn(async move {
+            let mut handler = handler_cloned.lock().await;
+            handler.start_actives(mic_tx, output_rx).unwrap();
+            handler.stop().unwrap();
+        });
 
-        handler.start_actives(mic_tx, output_rx).unwrap();
-        handler.stop().unwrap();
+        sleep(Duration::from_millis(150));
 
+        let handler = handler.lock().await;
         assert_eq!(handler.input_stream.0.is_none(), true);
         assert_eq!(handler.output_stream.0.is_none(), true);
     }
